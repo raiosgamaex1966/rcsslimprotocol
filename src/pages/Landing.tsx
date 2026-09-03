@@ -5,15 +5,15 @@ import { isDemoMode } from '../lib/backend';
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen w-full bg-slate-950 text-white overflow-x-hidden">
       {/* Header */}
       <header className="absolute inset-x-0 top-0 z-20">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-4 sm:px-5 sm:py-5">
           <Logo dark />
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
             {isDemoMode() && <ModeBadge />}
             <Link to="/login">
-              <Button variant="white" className="!px-4 !py-2 text-xs">
+              <Button variant="white" className="!px-3.5 !py-1.5 text-[11px] sm:!px-4 sm:!py-2 sm:text-xs">
                 Entrar
               </Button>
             </Link>
@@ -24,36 +24,36 @@ export default function Landing() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="bg-grid absolute inset-0" />
-        <div className="absolute -top-40 left-1/2 h-[480px] w-[720px] -translate-x-1/2 rounded-full bg-brand-500/20 blur-[120px]" />
-        <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-teal-500/15 blur-[100px]" />
+        <div className="absolute -top-40 left-1/2 h-[360px] w-[90vw] max-w-[720px] -translate-x-1/2 rounded-full bg-brand-500/20 blur-[100px] sm:h-[480px] sm:blur-[120px]" />
+        <div className="absolute bottom-0 right-0 h-64 w-64 rounded-full bg-teal-500/15 blur-[100px] sm:h-72 sm:w-72" />
 
-        <div className="relative mx-auto grid max-w-6xl items-center gap-10 px-5 pb-20 pt-32 lg:grid-cols-2 lg:pt-36">
+        <div className="relative mx-auto grid max-w-6xl items-center gap-8 px-4 pb-16 pt-28 sm:px-5 sm:gap-10 sm:pb-20 sm:pt-32 lg:grid-cols-2 lg:pt-36">
           <div className="animate-fade-up">
-            <span className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-500/10 px-3.5 py-1.5 text-xs font-bold text-brand-300">
-              <HeartPulse className="h-3.5 w-3.5" />
+            <span className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-500/10 px-2.5 py-1.5 text-[10px] font-bold text-brand-300 sm:px-3.5 sm:text-xs">
+              <HeartPulse className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Acompanhamento de canetas GLP-1 · Semaglutida, Liraglutida e Tirzepatida
             </span>
-            <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.4rem]">
+            <h1 className="mt-4 text-[1.9rem] font-extrabold leading-[1.08] tracking-tight sm:mt-5 sm:text-4xl sm:leading-[1.08] lg:text-[3.4rem]">
               Seu tratamento com caneta, <span className="text-gradient">organizado e sob controle.</span>
             </h1>
-            <p className="mt-5 max-w-lg text-base leading-relaxed text-slate-300">
+            <p className="mt-4 max-w-lg text-[14.5px] leading-relaxed text-slate-300 sm:mt-5 sm:text-base">
               Registre sua medicação e a miligrama semanal, acompanhe a próxima dose com contagem regressiva, o histórico de aplicações,
               a evolução do peso e o IMC — tudo em um painel simples e bonito.
             </p>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="mt-6 flex flex-wrap items-center gap-3 sm:mt-8">
               <Link to="/cadastro">
-                <Button className="!px-6 !py-3">
-                  Criar minha conta <ArrowRight className="h-4 w-4" />
+                <Button className="!px-5 !py-2.5 text-sm sm:!px-6 sm:!py-3">
+                  Criar minha conta <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </Button>
               </Link>
               <Link to="/login">
-                <Button variant="white" className="!px-6 !py-3">
+                <Button variant="white" className="!px-5 !py-2.5 text-sm sm:!px-6 sm:!py-3">
                   Já tenho conta
                 </Button>
               </Link>
             </div>
-            <p className="mt-6 flex items-center gap-2 text-xs text-slate-400">
-              <ShieldCheck className="h-4 w-4 text-brand-400" />
+            <p className="mt-5 flex items-center gap-2 text-[11px] text-slate-400 sm:mt-6 sm:text-xs">
+              <ShieldCheck className="h-3.5 w-3.5 text-brand-400 sm:h-4 sm:w-4" />
               Login seguro com verificação de e-mail (Supabase Auth)
             </p>
           </div>
