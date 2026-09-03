@@ -1,0 +1,29 @@
+{
+  "name": "MinhaCaneta — Acompanhamento GLP-1/GIP",
+  "short_name": "MinhaCaneta",
+  "description": "Acompanhe canetas de semaglutida, liraglutida e tirzepatida: doses semanais, nutrição, exercícios e bem-estar.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "id": "#/",
+  "start_url": "./#/",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#020617",
+  "theme_color": "#159275",
+  "categories": ["health", "medical", "fitness", "lifestyle"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Minhas doses",
+      "short_name": "Doses",
+      "description": "Abrir o painel de doses diretamente",
+      "url": "./#/app",
+      "icons": [{ "src": "icons/icon-512.png", "sizes": "512x512" }]
+    }
+  ]
+}
