@@ -519,6 +519,11 @@ export default function Dashboard() {
                               Semana {week} de {phases[phases.length - 1].endWeek == null ? `${phases[phases.length - 1].startWeek}+` : 'tratamento'}
                             </Badge>
                           )}
+                          {profile?.patientCode && (
+                            <Badge className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/30" title="Código para seu médico ou personal">
+                              Código: <strong className="font-mono tracking-wider ml-1">{profile.patientCode}</strong>
+                            </Badge>
+                          )}
                         </div>
                         <div className="mt-4 flex items-center gap-3">
                           <span className={cn('grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br text-white shadow-lg', med?.color ?? 'from-brand-500 to-teal-600')}>
