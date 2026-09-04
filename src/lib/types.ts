@@ -91,11 +91,47 @@ export interface Treatment {
   phases?: DosePhase[]; // esquema progressivo opcional (definido pelo médico)
 }
 
+export type InjectionSite =
+  | 'abdomen_superior_direito'
+  | 'abdomen_superior_esquerdo'
+  | 'abdomen_inferior_direito'
+  | 'abdomen_inferior_esquerdo'
+  | 'coxa_direita'
+  | 'coxa_esquerda'
+  | 'braco_direito'
+  | 'braco_esquerdo';
+
+export const INJECTION_SITE_LABELS: Record<InjectionSite, string> = {
+  abdomen_superior_direito: 'Abdômen (superior direito)',
+  abdomen_superior_esquerdo: 'Abdômen (superior esquerdo)',
+  abdomen_inferior_direito: 'Abdômen (inferior direito)',
+  abdomen_inferior_esquerdo: 'Abdômen (inferior esquerdo)',
+  coxa_direita: 'Coxa (direita)',
+  coxa_esquerda: 'Coxa (esquerda)',
+  braco_direito: 'Braço (direito)',
+  braco_esquerdo: 'Braço (esquerdo)',
+};
+
 export interface DoseLog {
   id: string;
   date: string; // ISO
   doseMg: number;
   medId: string;
+  site?: InjectionSite;
+  notes?: string;
+}
+
+export interface PenStock {
+  openedAt: string; // yyyy-mm-dd
+  totalDoses: number;
+  dosesUsed: number;
+  expiryDays: number; // 30 ou 56 dias
+  brand: string;
+}
+
+export interface WaterLog {
+  date: string; // yyyy-mm-dd
+  ml: number;
 }
 
 export interface WeightEntry {
@@ -168,6 +204,9 @@ export interface PatientData {
   logs: DoseLog[];
   weights: WeightEntry[];
   nutritionLogs?: NutritionLog[];
+  waterLogs?: WaterLog[];
+  penStock?: PenStock | null;
+  targetWeightKg?: number | null;
   physicalAssessment?: PhysicalAssessment;
   workoutLogs?: WorkoutLog[];
   symptomLogs?: SymptomLog[];

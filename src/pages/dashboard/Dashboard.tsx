@@ -28,11 +28,15 @@ import ExerciseTab from '../../components/ExerciseTab';
 import ThemeSwitcher from '../../components/ThemeSwitcher';
 import SymptomLog from '../../components/SymptomLog';
 import PatientConnections from '../../components/PatientConnections';
+import InjectionSiteModal from '../../components/InjectionSiteModal';
+import WaterTrackerCard from '../../components/WaterTrackerCard';
+import PenStockCard from '../../components/PenStockCard';
 import { useAuth } from '../../context/AuthContext';
 import { checkSuperAdmin, loadPatientData, savePatientData } from '../../lib/backend';
 import { ACTIVE_INGREDIENT_LABEL, findMedication } from '../../data/medications';
 import { activePhase, adherenceRate, ageFromBirth, cycleProgress, doseAtDate, doseStatus, fmtDateLong, fmtDateMedium, fmtMg, imcInfo, nextDoseDate, nextPhase, relativeDays, sortedPhases, treatmentWeek, upcomingDates, WEEKDAY_NAMES } from '../../lib/schedule';
-import type { PatientData, Treatment } from '../../lib/types';
+import type { InjectionSite, PatientData, PenStock, Treatment } from '../../lib/types';
+import { INJECTION_SITE_LABELS } from '../../lib/types';
 import { cn } from '../../utils/cn';
 import { MedicationsTabBody } from './CatalogTab';
 
@@ -227,16 +231,81 @@ export default function Dashboard() {
   const lastWeight = data?.weights.length ? data.weights[data.weights.length - 1].kg : null;
   const weightDelta =
     lastWeight != null && profile?.startWeightKg != null ? Math.round((lastWeight - profile.startWeightKg) * 10) / 10 : null;
+  const weightDeltaPct =
+    lastWeight != null && profile?.startWeightKg != null && profile.startWeightKg > 0
+      ? Math.round(((lastWeight - profile.startWeightKg) / profile.startWeightKg) * 1000) / 10
+      : null;
 
   const [weightInput, setWeightInput] = useState('');
+  const [targetWeightInput, setTargetWeightInput] = useState(
+    data?.targetWeightKg ? String(data.targetWeightKg) : '',
+  );
+  const [editingTarget, setEditingTarget] = useState(false);
   const [justApplied, setJustApplied] = useState(false);
+  const [siteModalOpen, setSiteModalOpen] = useState(false);
 
-  function handleApplyDose() {
+  // Rodízio de locais
+  const lastSite = useMemo(() => {
+    for (let i = appliedLogs.length - 1; i >= 0; i--) {
+      if (appliedLogs[i].site) return appliedLogs[i].site;
+    }
+    return undefined;
+  }, [appliedLogs]);
+
+  const suggestedSite: InjectionSite = useMemo(() => {
+    const rotation: InjectionSite[] = [
+      'abdomen_inferior_direito',
+      'abdomen_inferior_esquerdo',
+      'coxa_direita',
+      'coxa_esquerda',
+      'abdomen_superior_direito',
+      'abdomen_superior_esquerdo',
+      'braco_direito',
+      'braco_esquerdo',
+    ];
+    if (!lastSite) return rotation[0];
+    const idx = rotation.indexOf(lastSite);
+    return rotation[(idx + 1) % rotation.length];
+  }, [lastSite]);
+
+  function handleStartApplyDose() {
     if (!treatment) return;
-    update((prev) => ({
-      ...prev,
-      logs: [...prev.logs, { id: uid(), date: new Date().toISOString(), doseMg: doseAtDate(treatment, new Date()), medId: treatment.medId }],
-    }));
+    setSiteModalOpen(true);
+  }
+
+  function handleConfirmDoseWithSite(site: InjectionSite, notes?: string) {
+    if (!treatment) return;
+    setSiteModalOpen(false);
+
+    const doseNow = doseAtDate(treatment, new Date());
+
+    update((prev) => {
+      // Se tiver caneta cadastrada, incrementa o uso
+      const currentStock = prev.penStock;
+      const updatedStock: PenStock | null | undefined = currentStock
+        ? {
+            ...currentStock,
+            dosesUsed: currentStock.dosesUsed + 1,
+          }
+        : currentStock;
+
+      return {
+        ...prev,
+        penStock: updatedStock,
+        logs: [
+          ...prev.logs,
+          {
+            id: uid(),
+            date: new Date().toISOString(),
+            doseMg: doseNow,
+            medId: treatment.medId,
+            site,
+            notes: notes?.trim() ? notes.trim() : undefined,
+          },
+        ],
+      };
+    });
+
     setJustApplied(true);
     window.setTimeout(() => setJustApplied(false), 2600);
   }
@@ -253,6 +322,35 @@ export default function Dashboard() {
       weights: [...prev.weights, { date: new Date().toISOString(), kg: Math.round(kg * 10) / 10 }],
     }));
     setWeightInput('');
+  }
+
+  function handleSaveTargetWeight() {
+    const kg = parseFloat(targetWeightInput.replace(',', '.'));
+    if (!Number.isFinite(kg) || kg < 30 || kg > 400) return;
+    update((prev) => ({
+      ...prev,
+      targetWeightKg: Math.round(kg * 10) / 10,
+    }));
+    setEditingTarget(false);
+  }
+
+  function handleUpdateWater(mlToday: number) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    update((prev) => {
+      const existing = prev.waterLogs ?? [];
+      const filtered = existing.filter((w) => w.date !== todayStr);
+      return {
+        ...prev,
+        waterLogs: [...filtered, { date: todayStr, ml: mlToday }],
+      };
+    });
+  }
+
+  function handleUpdatePenStock(newStock: PenStock | null) {
+    update((prev) => ({
+      ...prev,
+      penStock: newStock,
+    }));
   }
 
   function handleLogout() {
@@ -307,6 +405,13 @@ export default function Dashboard() {
             </nav>
           </div>
           <div className="flex items-center gap-2.5">
+            <Link
+              to="/relatorio-consulta"
+              title="Gerar relatório impresso / PDF para consulta médica"
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              📄 Relatório Médico
+            </Link>
             <ThemeSwitcher />
             <div className="hidden text-right sm:block">
               <p className="text-xs font-extrabold leading-tight text-slate-800 dark:text-slate-100">{profile?.name ?? user.name}</p>
@@ -437,7 +542,7 @@ export default function Dashboard() {
                         )}
 
                         <div className="mt-5 flex flex-wrap items-center gap-3">
-                          <Button onClick={handleApplyDose} className={cn('!px-5 !py-3 text-sm', justApplied ? '!from-emerald-500 !to-emerald-600' : '')}>
+                          <Button onClick={handleStartApplyDose} className={cn('!px-5 !py-3 text-sm', justApplied ? '!from-emerald-500 !to-emerald-600' : '')}>
                             {justApplied ? (
                               <>
                                 <CheckCircle2 className="h-4 w-4" /> Dose registrada!
@@ -452,6 +557,14 @@ export default function Dashboard() {
                             <Pencil className="h-3.5 w-3.5" /> Editar tratamento
                           </button>
                         </div>
+                        {lastSite && (
+                          <p className="mt-2.5 text-[11px] text-slate-400">
+                            Última aplicação:{' '}
+                            <span className="font-bold text-slate-300">
+                              {INJECTION_SITE_LABELS[lastSite]}
+                            </span>
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-center sm:flex-col sm:gap-2">
@@ -531,12 +644,71 @@ export default function Dashboard() {
                         )}
                       </div>
                       {weightDelta != null && (
-                        <p className={cn('mt-2 inline-flex items-center gap-1 text-xs font-extrabold', weightDelta <= 0 ? 'text-emerald-600' : 'text-amber-600')}>
-                          {weightDelta <= 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
-                          {weightDelta > 0 ? '+' : ''}
-                          {weightDelta.toLocaleString('pt-BR')} kg desde o início
-                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className={cn('inline-flex items-center gap-1 text-xs font-extrabold', weightDelta <= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600')}>
+                            {weightDelta <= 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
+                            {weightDelta > 0 ? '+' : ''}
+                            {weightDelta.toLocaleString('pt-BR')} kg ({weightDeltaPct && weightDeltaPct > 0 ? '+' : ''}{weightDeltaPct}%)
+                          </span>
+                        </div>
                       )}
+
+                      {/* Meta de peso */}
+                      <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-2.5 text-xs dark:border-slate-800 dark:bg-slate-800/40">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase text-slate-400">Meta de Peso</span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTarget((v) => !v)}
+                            className="text-[10px] font-bold text-brand-600 hover:underline dark:text-brand-400"
+                          >
+                            {editingTarget ? 'Fechar' : data?.targetWeightKg ? `${data.targetWeightKg} kg (editar)` : '+ Definir meta'}
+                          </button>
+                        </div>
+                        {editingTarget ? (
+                          <div className="mt-2 flex gap-1.5">
+                            <TextInput
+                              type="number"
+                              step="0.1"
+                              placeholder="Ex: 68"
+                              value={targetWeightInput}
+                              onChange={(e) => setTargetWeightInput(e.target.value)}
+                              className="!py-1 text-xs"
+                            />
+                            <Button onClick={handleSaveTargetWeight} className="!px-2.5 !py-1 text-xs">
+                              Salvar
+                            </Button>
+                          </div>
+                        ) : data?.targetWeightKg && lastWeight != null ? (
+                          <div className="mt-1.5">
+                            <div className="flex items-center justify-between text-[10px] font-bold text-slate-500">
+                              <span>Faltam {Math.max(0, Math.round((lastWeight - data.targetWeightKg) * 10) / 10)} kg</span>
+                              <span>Objetivo: {data.targetWeightKg} kg</span>
+                            </div>
+                            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                              <div
+                                className="h-full rounded-full bg-emerald-500 transition-all"
+                                style={{
+                                  width: `${Math.min(
+                                    100,
+                                    Math.max(
+                                      0,
+                                      profile?.startWeightKg && profile.startWeightKg > data.targetWeightKg
+                                        ? Math.round(
+                                            ((profile.startWeightKg - lastWeight) /
+                                              (profile.startWeightKg - data.targetWeightKg)) *
+                                              100,
+                                          )
+                                        : 100,
+                                    ),
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+
                       <div className="mt-3 flex gap-2">
                         <TextInput type="number" step="0.1" placeholder="Atualizar peso…" value={weightInput} onChange={(e) => setWeightInput(e.target.value)} className="!py-2 text-xs" />
                         <Button onClick={handleSaveWeight} className="!px-3 !py-2 text-xs">Salvar</Button>
@@ -595,6 +767,11 @@ export default function Dashboard() {
                                 </p>
                                 <p className="text-[10px] font-semibold text-slate-400">
                                   {new Date(l.date).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  {l.site && (
+                                    <span className="ml-1.5 text-brand-600 dark:text-brand-400">
+                                      · {INJECTION_SITE_LABELS[l.site]}
+                                    </span>
+                                  )}
                                 </p>
                               </div>
                               <button onClick={() => handleUndoLog(l.id)} className="rounded-lg p-1.5 text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500" title="Desfazer registro">
@@ -615,6 +792,20 @@ export default function Dashboard() {
                     <p className="mt-1 text-xs leading-relaxed text-blue-900 dark:text-blue-100">{data.professionalNotes.medico.text}</p>
                   </div>
                 )}
+
+                {/* Hidratação e Estoque de Caneta */}
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <WaterTrackerCard
+                    currentWeightKg={lastWeight ?? profile?.startWeightKg ?? null}
+                    waterLogs={data?.waterLogs}
+                    onUpdateWater={handleUpdateWater}
+                  />
+                  <PenStockCard
+                    brand={med?.brand ?? 'Caneta GLP-1'}
+                    stock={data?.penStock}
+                    onUpdateStock={handleUpdatePenStock}
+                  />
+                </div>
 
                 <SymptomLog data={data!} update={update} />
 
@@ -674,6 +865,16 @@ export default function Dashboard() {
           ))}
         </div>
       </nav>
+
+      {/* Modal de Rodízio do Local de Injeção */}
+      <InjectionSiteModal
+        isOpen={siteModalOpen}
+        onClose={() => setSiteModalOpen(false)}
+        onConfirm={handleConfirmDoseWithSite}
+        lastSite={lastSite}
+        suggestedSite={suggestedSite}
+        doseMg={treatment ? doseAtDate(treatment, new Date()) : 0}
+      />
     </div>
   );
 }

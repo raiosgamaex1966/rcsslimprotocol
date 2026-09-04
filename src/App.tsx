@@ -11,6 +11,7 @@ import AdminPanel from './pages/admin/AdminPanel';
 import InstallPrompt from './components/InstallPrompt';
 import ProfessionalRegister from './pages/ProfessionalRegister';
 import ProfessionalPortal from './pages/professional/ProfessionalPortal';
+import MedicalReport from './pages/MedicalReport';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -79,6 +80,14 @@ export default function App() {
             element={
               <Protected>
                 <Dashboard />
+              </Protected>
+            }
+          />
+          <Route
+            path="/relatorio-consulta"
+            element={
+              <Protected>
+                <MedicalReport />
               </Protected>
             }
           />
