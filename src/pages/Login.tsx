@@ -1,9 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowLeft, Eye, EyeOff, KeyRound, LoaderCircle, LogIn, Mail } from 'lucide-react';
-import { Button, DisclaimerBox, Field, Logo, ModeBadge, TextInput } from '../components/ui';
+import { Button, DisclaimerBox, Field, Logo, TextInput } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { isDemoMode } from '../lib/backend';
 
 export default function Login() {
   const { signIn } = useAuth();
@@ -60,7 +59,6 @@ export default function Login() {
           <Link to="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400">
             <ArrowLeft className="h-3.5 w-3.5" /> Voltar
           </Link>
-          {isDemoMode() && <ModeBadge />}
         </div>
 
         <div className="flex flex-1 items-center justify-center px-5 pb-12">
@@ -68,22 +66,6 @@ export default function Login() {
             <div className="lg:hidden"><Logo /></div>
             <h1 className="mt-6 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white lg:mt-0">Entrar na sua conta</h1>
             <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Acesse seu painel de acompanhamento do tratamento.</p>
-
-            {isDemoMode() && (
-              <div className="mt-4 space-y-1.5 rounded-xl border border-sky-200 bg-sky-50 p-3 text-[11px] leading-relaxed text-sky-800 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-200">
-                <p>
-                  <b>Modo demonstração ativo:</b> o Supabase ainda não foi configurado neste build, então os dados ficam salvos
-                  apenas neste navegador. Cadastre-se e simule a verificação de e-mail para testar o fluxo completo.
-                </p>
-                <p className="border-t border-sky-200 pt-1.5 dark:border-sky-800">
-                  🛡️ <b>Super Admin:</b> <code>admin@minhacaneta.app</code> · senha <code>admin123</code> — acesse a{' '}
-                  <Link to="/admin" className="font-extrabold underline">
-                    área do super admin
-                  </Link>{' '}
-                  para configurar a LLM de nutrição.
-                </p>
-              </div>
-            )}
 
             {error && (
               <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200">
