@@ -237,6 +237,7 @@ export interface AuthUser {
   email: string;
   name: string;
   professional?: ProfessionalInfo;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SignUpPayload {

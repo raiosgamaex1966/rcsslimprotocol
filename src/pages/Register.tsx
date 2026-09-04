@@ -274,10 +274,7 @@ export default function Register() {
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => {
-                        setCaptcha(true);
-                        window.setTimeout(() => setCaptcha(false), 2200);
-                      }}
+                      onClick={() => setCaptcha((prev) => !prev)}
                       className={`grid h-7 w-7 shrink-0 place-items-center rounded-md border-2 transition-all duration-200 ${
                         captcha ? 'border-brand-600 bg-brand-600 text-white shadow-md shadow-brand-500/40' : 'border-slate-300 bg-white hover:border-brand-400 dark:border-slate-600 dark:bg-slate-900'
                       }`}

@@ -48,7 +48,10 @@ function uid() {
 
 /* ================= Hook de dados do paciente ================= */
 
-function usePatientData(userId: string, fallback: { name: string; email: string }) {
+function usePatientData(
+  userId: string,
+  fallback: { name: string; email: string; metadata?: Record<string, unknown>; professional?: import('../../lib/types').ProfessionalInfo },
+) {
   const [data, setData] = useState<PatientData | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -56,31 +59,83 @@ function usePatientData(userId: string, fallback: { name: string; email: string 
     let on = true;
     loadPatientData(userId).then((d) => {
       if (!on) return;
+
+      const emailKey = fallback.email.trim().toLowerCase();
+      let pendingReg: Partial<import('../../lib/types').SignUpPayload> | null = null;
+      try {
+        const stored = localStorage.getItem(`minhacaneta_pending_reg_${emailKey}`);
+        if (stored) pendingReg = JSON.parse(stored);
+      } catch {
+        // ignore
+      }
+
+      const meta = fallback.metadata ?? {};
+      const regSex = ((meta.sex as string) || pendingReg?.sex || '') as import('../../lib/types').Sexo | '';
+      const regBirth = (meta.birthDate as string) || pendingReg?.birthDate || '';
+      const regPhone = (meta.phone as string) || pendingReg?.phone || '';
+      const regWhatsapp = (meta.whatsapp as string) || pendingReg?.whatsapp || '';
+      const rawW = meta.startWeightKg ?? pendingReg?.startWeightKg;
+      const regStartWeight = rawW != null ? Number(rawW) : null;
+      const rawH = meta.heightCm ?? pendingReg?.heightCm;
+      const regHeight = rawH != null ? Number(rawH) : null;
+      const regProf = (fallback.professional ?? meta.professional ?? pendingReg?.professional) as import('../../lib/types').ProfessionalInfo | undefined;
+
       if (d) {
-        setData(d);
-      } else {
-        let metaProf: import('../lib/types').ProfessionalInfo | undefined = undefined;
-        try {
-          const stored = localStorage.getItem(`prof_${fallback.email.trim().toLowerCase()}`);
-          if (stored) metaProf = JSON.parse(stored);
-        } catch {
-          // ignore
+        // Se d já existe no banco, mas alguns campos de cadastro ficaram vazios (ex: RLS no signup),
+        // completamos com os metadados do cadastro para que o usuário não perca seus dados!
+        const existingProf = d.profile || {};
+        const mergedProf: import('../../lib/types').Profile = {
+          ...existingProf,
+          name: existingProf.name || fallback.name,
+          sex: existingProf.sex || regSex,
+          birthDate: existingProf.birthDate || regBirth,
+          email: existingProf.email || fallback.email,
+          phone: existingProf.phone || regPhone,
+          whatsapp: existingProf.whatsapp || regWhatsapp,
+          startWeightKg: existingProf.startWeightKg ?? regStartWeight,
+          heightCm: existingProf.heightCm ?? regHeight,
+          professional: existingProf.professional ?? regProf,
+        };
+
+        const existingWeights = d.weights || [];
+        const mergedWeights =
+          existingWeights.length === 0 && mergedProf.startWeightKg != null
+            ? [{ date: new Date().toISOString(), kg: mergedProf.startWeightKg }]
+            : existingWeights;
+
+        const mergedData: PatientData = {
+          ...d,
+          profile: mergedProf,
+          weights: mergedWeights,
+        };
+
+        setData(mergedData);
+        // Salva de volta se atualizou algo importante
+        if (
+          !existingProf.birthDate && mergedProf.birthDate ||
+          existingProf.startWeightKg == null && mergedProf.startWeightKg != null ||
+          existingProf.heightCm == null && mergedProf.heightCm != null
+        ) {
+          void savePatientData(userId, mergedData);
         }
+      } else {
+        const initialProfile: import('../../lib/types').Profile = {
+          name: fallback.name,
+          sex: regSex,
+          birthDate: regBirth,
+          email: fallback.email,
+          phone: regPhone,
+          whatsapp: regWhatsapp,
+          startWeightKg: regStartWeight,
+          heightCm: regHeight,
+          professional: regProf,
+        };
+
         const initial: PatientData = {
-          profile: {
-            name: fallback.name,
-            sex: '',
-            birthDate: '',
-            email: fallback.email,
-            phone: '',
-            whatsapp: '',
-            startWeightKg: null,
-            heightCm: null,
-            professional: metaProf,
-          },
+          profile: initialProfile,
           treatment: null,
           logs: [],
-          weights: [],
+          weights: regStartWeight != null ? [{ date: new Date().toISOString(), kg: regStartWeight }] : [],
         };
         setData(initial);
         void savePatientData(userId, initial);
@@ -90,7 +145,7 @@ function usePatientData(userId: string, fallback: { name: string; email: string 
     return () => {
       on = false;
     };
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, fallback.metadata]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const update = useCallback(
     (updater: (prev: PatientData) => PatientData) => {
@@ -210,7 +265,12 @@ export default function Dashboard() {
   }, [user?.id]);
 
   const userId = user?.id;
-  const { data, ready, update } = usePatientData(userId ?? '', { name: user?.name ?? '', email: user?.email ?? '' });
+  const { data, ready, update } = usePatientData(userId ?? '', {
+    name: user?.name ?? '',
+    email: user?.email ?? '',
+    metadata: user?.metadata,
+    professional: user?.professional,
+  });
 
   const profile = data?.profile;
   const treatment: Treatment | null = data?.treatment ?? null;

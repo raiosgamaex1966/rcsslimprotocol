@@ -124,9 +124,9 @@ export function DisclaimerBox({ compact = false, className }: { compact?: boolea
 
 export function ModeBadge() {
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:bg-slate-800 dark:text-slate-300">
-      <ShieldCheck className="h-3 w-3 text-brand-600 dark:text-brand-400" />
-      Modo demonstração
+    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+      <ShieldCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+      Conectado e seguro
     </div>
   );
 }

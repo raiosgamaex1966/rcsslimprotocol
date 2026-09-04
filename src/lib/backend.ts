@@ -111,14 +111,29 @@ export async function signUp(payload: SignUpPayload): Promise<AuthResult> {
   }
 
   const name = payload.name.trim();
+  const normalizedEmail = payload.email.trim().toLowerCase();
+
+  // Guarda localmente como contingência caso o Supabase RLS barre persistInitialData antes do primeiro login
+  try {
+    localStorage.setItem(`minhacaneta_pending_reg_${normalizedEmail}`, JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+
   const { data: authData, error } = await supabase!.auth.signUp({
-    email: payload.email.trim().toLowerCase(),
+    email: normalizedEmail,
     password: payload.password,
     options: {
       data: {
         name,
         role: payload.professional ? 'professional' : 'patient',
         professional: payload.professional,
+        sex: payload.sex,
+        birthDate: payload.birthDate,
+        phone: payload.phone,
+        whatsapp: payload.whatsapp,
+        startWeightKg: payload.startWeightKg,
+        heightCm: payload.heightCm,
       },
       emailRedirectTo: REDIRECT_URL,
     },
@@ -226,12 +241,13 @@ export async function getSessionUser(): Promise<AuthUser | null> {
   const { data } = await supabase!.auth.getSession();
   const su = data.session?.user;
   if (!su) return null;
-  const meta = su.user_metadata as { name?: string; professional?: import('./types').ProfessionalInfo } | undefined;
+  const meta = su.user_metadata as (Record<string, unknown> & { name?: string; professional?: import('./types').ProfessionalInfo }) | undefined;
   return {
     id: su.id,
     email: su.email ?? '',
     name: meta?.name ?? su.email?.split('@')[0] ?? 'Paciente',
     professional: meta?.professional,
+    metadata: meta,
   };
 }
 
@@ -250,12 +266,13 @@ export function subscribeAuth(cb: (user: AuthUser | null) => void): () => void {
       cb(null);
       return;
     }
-    const meta = su.user_metadata as { name?: string; professional?: import('./types').ProfessionalInfo } | undefined;
+    const meta = su.user_metadata as (Record<string, unknown> & { name?: string; professional?: import('./types').ProfessionalInfo }) | undefined;
     cb({
       id: su.id,
       email: su.email ?? '',
       name: meta?.name ?? su.email?.split('@')[0] ?? 'Paciente',
       professional: meta?.professional,
+      metadata: meta,
     });
   });
   return () => data.subscription.unsubscribe();
