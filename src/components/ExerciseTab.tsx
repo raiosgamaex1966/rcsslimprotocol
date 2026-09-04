@@ -321,18 +321,73 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                   const embed = videoEmbedUrl(video.videoUrl);
                   const selected = openVideo === video.id;
                   const assignedToMe = video.assignedPatientIds?.includes(userId);
-                  return <Card key={video.id} className={cn('overflow-hidden', assignedToMe && 'border-cyan-400 ring-2 ring-cyan-400/30')}><div id={`video-${video.id}`} />
-                    <button onClick={() => setOpenVideo(selected ? null : video.id)} className="relative block aspect-video w-full overflow-hidden bg-slate-950 text-white">
-                      {video.thumbnailUrl ? <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover opacity-70" /> : <div className="bg-grid absolute inset-0" />}
-                      <span className="absolute inset-0 grid place-items-center"><span className="grid h-12 w-12 place-items-center rounded-full bg-white/90 text-cyan-700 shadow-xl"><Film className="h-5 w-5" /></span></span>
-                      <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-[10px] font-bold">{video.durationMinutes} min</span>
-                      {assignedToMe && <span className="absolute left-2 top-2 rounded-full bg-cyan-500 px-2 py-1 text-[9px] font-extrabold">Enviado pelo seu personal</span>}
-                    </button>
-                    <div className="p-4"><div className="flex gap-2"><div className="min-w-0 flex-1"><p className="text-sm font-extrabold text-slate-900 dark:text-white">{video.title}</p><p className="mt-0.5 text-[10px] font-semibold text-slate-400">{video.specialistName}{video.specialistCredential ? ` · ${video.specialistCredential}` : ''}</p></div><Badge className="h-fit bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">{video.category.replace('_', ' ')}</Badge></div><p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{video.description}</p></div>
-                    {selected && <div className="border-t border-slate-100 bg-slate-950">
-                      {embed ? <iframe src={embed} title={video.title} className="aspect-video w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : <video src={video.videoUrl} controls playsInline className="aspect-video w-full bg-black" />}
-                    </div>}
-                  </Card>;
+                  return (
+                    <Card key={video.id} className={cn('overflow-hidden', assignedToMe && 'border-cyan-400 ring-2 ring-cyan-400/30')}>
+                      <div id={`video-${video.id}`} />
+                      {selected ? (
+                        <div className="relative aspect-video w-full bg-slate-950">
+                          {embed ? (
+                            <iframe
+                              src={embed}
+                              title={video.title}
+                              className="h-full w-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          ) : (
+                            <video src={video.videoUrl} controls autoPlay playsInline className="h-full w-full bg-black" />
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setOpenVideo(video.id)}
+                          className="group relative block aspect-video w-full overflow-hidden bg-slate-950 text-white"
+                        >
+                          {video.thumbnailUrl ? (
+                            <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover opacity-70 transition-opacity group-hover:opacity-90" />
+                          ) : (
+                            <div className="bg-grid absolute inset-0" />
+                          )}
+                          <span className="absolute inset-0 grid place-items-center">
+                            <span className="grid h-12 w-12 place-items-center rounded-full bg-white/90 text-cyan-700 shadow-xl transition-transform group-hover:scale-110">
+                              <Film className="h-5 w-5" />
+                            </span>
+                          </span>
+                          <span className="absolute bottom-2 right-2 rounded bg-black/70 px-2 py-1 text-[10px] font-bold">
+                            {video.durationMinutes} min
+                          </span>
+                          {assignedToMe && (
+                            <span className="absolute left-2 top-2 rounded-full bg-cyan-500 px-2 py-1 text-[9px] font-extrabold">
+                              Enviado pelo seu personal
+                            </span>
+                          )}
+                        </button>
+                      )}
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-extrabold text-slate-900 dark:text-white">{video.title}</p>
+                            <p className="mt-0.5 text-[10px] font-semibold text-slate-400">
+                              {video.specialistName}
+                              {video.specialistCredential ? ` · ${video.specialistCredential}` : ''}
+                            </p>
+                          </div>
+                          <Badge className="h-fit bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">
+                            {video.category.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{video.description}</p>
+                        {selected && (
+                          <button
+                            onClick={() => setOpenVideo(null)}
+                            className="mt-3 text-[11px] font-bold text-cyan-600 hover:text-cyan-700 dark:text-cyan-400"
+                          >
+                            Fechar vídeo ▲
+                          </button>
+                        )}
+                      </div>
+                    </Card>
+                  );
                 })}
               </div>
             )}
