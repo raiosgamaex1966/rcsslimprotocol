@@ -454,9 +454,9 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-50 pb-24 dark:bg-slate-950 lg:pb-8">
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-lg dark:border-slate-800 dark:bg-slate-900/85">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3">
-          <div className="flex items-center gap-3">
-            <Logo />
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:px-5 sm:py-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Logo hideSubtitleOnMobile />
             <nav className="ml-4 hidden items-center gap-1 md:flex">
               {(
                 [
@@ -483,16 +483,16 @@ export default function Dashboard() {
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <Link
               to="/relatorio-consulta"
               title="Gerar relatório impresso / PDF para consulta médica"
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:px-3"
             >
-              📄 Relatório Médico
+              <span>📄</span> <span className="hidden xs:inline sm:inline">Relatório</span>
             </Link>
             <ThemeSwitcher />
-            <div className="hidden text-right sm:block">
+            <div className="hidden text-right md:block">
               <p className="text-xs font-extrabold leading-tight text-slate-800 dark:text-slate-100">{profile?.name ?? user.name}</p>
               <p className="text-[10px] font-semibold text-slate-400">{user.email}</p>
             </div>
@@ -500,7 +500,7 @@ export default function Dashboard() {
               <Link
                 to="/admin"
                 title="Painel do Super Admin — configurar a LLM de nutrição"
-                className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-[10px] font-extrabold text-brand-700 transition-colors hover:bg-brand-100"
+                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-[10px] font-extrabold text-brand-700 transition-colors hover:bg-brand-100"
               >
                 <ShieldCheck className="h-3.5 w-3.5" /> Super Admin
               </Link>
@@ -509,13 +509,13 @@ export default function Dashboard() {
               <Link
                 to="/profissional"
                 title="Acessar o Portal do Profissional de Saúde"
-                className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[10px] font-extrabold text-cyan-700 transition-colors hover:bg-cyan-100 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-300"
+                className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-[10px] font-extrabold text-cyan-700 transition-colors hover:bg-cyan-100 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-300 sm:px-3"
               >
-                <Dumbbell className="h-3.5 w-3.5" /> Portal Profissional
+                <Dumbbell className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Portal Profissional</span>
               </Link>
             )}
-            <Avatar name={profile?.name ?? user.name} className="h-9 w-9 text-xs" />
-            <button onClick={handleLogout} className="grid h-9 w-9 place-items-center rounded-full text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600" title="Sair">
+            <Avatar name={profile?.name ?? user.name} className="h-8 w-8 sm:h-9 sm:w-9 text-[11px] sm:text-xs shrink-0" />
+            <button onClick={handleLogout} className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40" title="Sair">
               <LogOut className="h-4 w-4" />
             </button>
           </div>

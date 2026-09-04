@@ -145,20 +145,20 @@ export default function ProfessionalPortal() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-lg dark:border-slate-800 dark:bg-slate-900/85">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3">
-          <div className="flex items-center gap-3">
-            <Logo />
-            <Badge className="hidden bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300 sm:inline-flex">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:px-5 sm:py-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <Logo hideSubtitleOnMobile />
+            <Badge className="hidden bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300 md:inline-flex">
               <ShieldCheck className="h-3 w-3" /> Portal do Profissional
             </Badge>
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <ThemeSwitcher />
-            <div className="hidden text-right sm:block">
+            <div className="hidden text-right md:block">
               <p className="text-xs font-extrabold leading-tight text-slate-800 dark:text-slate-100">{account?.profile.name}</p>
               <p className="text-[10px] font-semibold text-slate-400">{ROLE_LABEL[professional.role]}</p>
             </div>
-            <Avatar name={account?.profile.name ?? user.name} className="h-9 w-9 text-xs" />
+            <Avatar name={account?.profile.name ?? user.name} className="h-8 w-8 sm:h-9 sm:w-9 text-[11px] sm:text-xs shrink-0" />
             <LogoutButton />
           </div>
         </div>

@@ -5,17 +5,17 @@ import { DISCLAIMER } from '../data/medications';
 
 /* ---------------- Brand ---------------- */
 
-export function Logo({ dark = false, size = 'md' }: { dark?: boolean; size?: 'md' | 'lg' }) {
+export function Logo({ dark = false, size = 'md', hideSubtitleOnMobile = false }: { dark?: boolean; size?: 'md' | 'lg'; hideSubtitleOnMobile?: boolean }) {
   return (
-    <div className="flex items-center gap-2.5 select-none">
-      <div className="grid place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-teal-600 shadow-lg shadow-brand-500/30 text-white">
-        <Syringe className={size === 'lg' ? 'h-6 w-6' : 'h-5 w-5'} />
+    <div className="flex shrink-0 items-center gap-2 select-none sm:gap-2.5">
+      <div className="grid shrink-0 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-teal-600 shadow-md shadow-brand-500/30 text-white">
+        <Syringe className={size === 'lg' ? 'h-6 w-6' : 'h-4 w-4 sm:h-5 sm:w-5'} />
       </div>
       <div className="leading-tight">
-        <span className={cn('block font-extrabold tracking-tight', size === 'lg' ? 'text-xl' : 'text-base', dark ? 'text-white' : 'text-slate-900')}>
+        <span className={cn('block font-extrabold tracking-tight', size === 'lg' ? 'text-lg sm:text-xl' : 'text-sm sm:text-base', dark ? 'text-white' : 'text-slate-900')}>
           Minha<span className="text-brand-600">Caneta</span>
         </span>
-        <span className={cn('block text-[10px] font-semibold uppercase tracking-[0.14em]', dark ? 'text-brand-200/80' : 'text-slate-400')}>
+        <span className={cn('text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.14em]', hideSubtitleOnMobile ? 'hidden sm:block' : 'block', dark ? 'text-brand-200/80' : 'text-slate-400')}>
           GLP-1 · acompanhamento
         </span>
       </div>
