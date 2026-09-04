@@ -29,9 +29,17 @@ import ThemeSwitcher from '../../components/ThemeSwitcher';
 import { useAuth } from '../../context/AuthContext';
 import { loadPatientData, savePatientData } from '../../lib/backend';
 import { listLinksForProfessional, requestPatientLink } from '../../lib/professional';
-import { loadExerciseVideos, saveExerciseVideos, uploadExerciseVideo, videoEmbedUrl, VIDEO_SUITABILITY } from '../../lib/videoLibrary';
+import {
+  loadExerciseVideos,
+  saveExerciseVideos,
+  uploadExerciseVideo,
+  uploadExerciseThumbnail,
+  videoEmbedUrl,
+  videoThumbnailUrl,
+  VIDEO_SUITABILITY,
+} from '../../lib/videoLibrary';
 import type { ExerciseVideo } from '../../lib/types';
-import { Film, Link2, Upload } from 'lucide-react';
+import { Film, Image as ImageIcon, Link2, Upload } from 'lucide-react';
 import { findMedication } from '../../data/medications';
 import {
   activePhase,
@@ -689,9 +697,11 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [fileRef] = useState(() => ({ current: null as HTMLInputElement | null }));
+  const [thumbFileRef] = useState(() => ({ current: null as HTMLInputElement | null }));
 
   async function refresh() {
     setVideos(await loadExerciseVideos());
@@ -701,6 +711,14 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
     void refresh();
   }, []);
 
+  function handleVideoUrlChange(val: string) {
+    setVideoUrl(val);
+    if (!thumbnailUrl) {
+      const autoThumb = videoThumbnailUrl(val);
+      if (autoThumb) setThumbnailUrl(autoThumb);
+    }
+  }
+
   async function handleUpload(file?: File) {
     if (!file) return;
     setBusy(true);
@@ -708,9 +726,24 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
     try {
       const url = await uploadExerciseVideo(file);
       setVideoUrl(url);
-      setMessage('Upload concluído. Preencha o título e publique.');
+      setMessage('Upload do vídeo concluído.');
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : 'Falha no upload.');
+      setMessage(e instanceof Error ? e.message : 'Falha no upload do vídeo.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleThumbnailUpload(file?: File) {
+    if (!file) return;
+    setBusy(true);
+    setMessage('Enviando capa (thumbnail)…');
+    try {
+      const url = await uploadExerciseThumbnail(file);
+      setThumbnailUrl(url);
+      setMessage('Capa enviada com sucesso!');
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Falha no upload da capa.');
     } finally {
       setBusy(false);
     }
@@ -721,6 +754,7 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
       setMessage('Informe um título e um vídeo/link.');
       return;
     }
+    const finalThumb = thumbnailUrl.trim() || videoThumbnailUrl(videoUrl) || undefined;
     const next: ExerciseVideo = {
       id: `${Date.now()}`,
       title,
@@ -733,6 +767,7 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
       level: 'todos',
       durationMinutes: 10,
       videoUrl,
+      thumbnailUrl: finalThumb,
       published: true,
       createdAt: new Date().toISOString(),
       assignedPatientIds: [patientId],
@@ -747,7 +782,8 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
       setTitle('');
       setDescription('');
       setVideoUrl('');
-      setMessage('Vídeo enviado para este paciente!');
+      setThumbnailUrl('');
+      setMessage('Vídeo e capa enviados para este paciente!');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Falha ao publicar vídeo.');
     } finally {
@@ -775,19 +811,71 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
         <Field label="Título do vídeo">
           <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex.: Sentar e levantar — técnica correta" />
         </Field>
-        <Field label="Link (YouTube/Vimeo/MP4)">
+        <Field label="Link do vídeo (YouTube/Vimeo/MP4)">
           <div className="relative">
             <Link2 className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <TextInput value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} className="pl-10" placeholder="https://…" />
+            <TextInput value={videoUrl} onChange={(e) => handleVideoUrlChange(e.target.value)} className="pl-10" placeholder="https://…" />
           </div>
         </Field>
       </div>
+
       <div className="mt-2.5">
         <Field label="Descrição (opcional)">
           <TextInput value={description} onChange={(e) => setDescription(e.target.value)} placeholder="O que este vídeo demonstra" />
         </Field>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2.5">
+
+      {/* Capa / Thumbnail */}
+      <div className="mt-3">
+        <Field label="Imagem de capa / Thumbnail (opcional)" hint="detectada automaticamente para links do YouTube, ou você pode subir uma foto/imagem">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="relative min-w-0 flex-1">
+              <ImageIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <TextInput
+                value={thumbnailUrl}
+                onChange={(e) => setThumbnailUrl(e.target.value)}
+                className="pl-10"
+                placeholder="https://… ou faça o upload ao lado"
+              />
+            </div>
+            <input
+              ref={(el) => {
+                thumbFileRef.current = el;
+              }}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => void handleThumbnailUpload(e.target.files?.[0])}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => thumbFileRef.current?.click()}
+              disabled={busy}
+              className="!px-3 !py-2 text-xs"
+            >
+              <Upload className="h-3.5 w-3.5" /> Enviar foto da capa
+            </Button>
+          </div>
+        </Field>
+        {thumbnailUrl && (
+          <div className="mt-2 flex items-center gap-3">
+            <div className="h-12 w-20 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-900">
+              <img src={thumbnailUrl} alt="Prévia da capa" className="h-full w-full object-cover" />
+            </div>
+            <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Capa definida com sucesso</p>
+            <button
+              type="button"
+              onClick={() => setThumbnailUrl('')}
+              className="text-[10px] font-bold text-rose-500 hover:underline"
+            >
+              Remover
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
         <input
           ref={(el) => {
             fileRef.current = el;
@@ -798,7 +886,7 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
           onChange={(e) => void handleUpload(e.target.files?.[0])}
         />
         <Button variant="secondary" onClick={() => fileRef.current?.click()} disabled={busy} className="!px-3 !py-2 text-xs">
-          {busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Enviar arquivo
+          {busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Enviar arquivo de vídeo
         </Button>
         <Button onClick={publishForPatient} disabled={busy} className="!px-4 !py-2 text-xs">
           <Save className="h-3.5 w-3.5" /> Publicar para este paciente

@@ -27,7 +27,7 @@ import { getLLMConfig } from '../lib/llm';
 import { weeklyWeightTrend } from '../lib/schedule';
 import { cn } from '../utils/cn';
 import type { ExerciseVideo } from '../lib/types';
-import { loadExerciseVideos, recommendedVideos, videoEmbedUrl } from '../lib/videoLibrary';
+import { loadExerciseVideos, recommendedVideos, videoEmbedUrl, videoThumbnailUrl } from '../lib/videoLibrary';
 
 interface Props {
   userId: string;
@@ -321,6 +321,7 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                   const embed = videoEmbedUrl(video.videoUrl);
                   const selected = openVideo === video.id;
                   const assignedToMe = video.assignedPatientIds?.includes(userId);
+                  const thumb = video.thumbnailUrl || videoThumbnailUrl(video.videoUrl);
                   return (
                     <Card key={video.id} className={cn('overflow-hidden', assignedToMe && 'border-cyan-400 ring-2 ring-cyan-400/30')}>
                       <div id={`video-${video.id}`} />
@@ -343,8 +344,8 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                           onClick={() => setOpenVideo(video.id)}
                           className="group relative block aspect-video w-full overflow-hidden bg-slate-950 text-white"
                         >
-                          {video.thumbnailUrl ? (
-                            <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover opacity-70 transition-opacity group-hover:opacity-90" />
+                          {thumb ? (
+                            <img src={thumb} alt="" className="h-full w-full object-cover opacity-80 transition-opacity group-hover:opacity-95" />
                           ) : (
                             <div className="bg-grid absolute inset-0" />
                           )}

@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Film, Link2, LoaderCircle, Play, Plus, Save, Trash2, Upload } from 'lucide-react';
+import { Check, Film, Image as ImageIcon, Link2, LoaderCircle, Play, Plus, Save, Trash2, Upload } from 'lucide-react';
 import { Badge, Button, Card, Field, SectionTitle, SelectInput, TextInput } from '../ui';
 import type { ExerciseVideo, ExerciseVideoCategory } from '../../lib/types';
-import { loadExerciseVideos, saveExerciseVideos, uploadExerciseVideo, VIDEO_SUITABILITY, videoEmbedUrl } from '../../lib/videoLibrary';
+import {
+  loadExerciseVideos,
+  saveExerciseVideos,
+  uploadExerciseVideo,
+  uploadExerciseThumbnail,
+  VIDEO_SUITABILITY,
+  videoEmbedUrl,
+  videoThumbnailUrl,
+} from '../../lib/videoLibrary';
 import { cn } from '../../utils/cn';
 
 const EMPTY: Omit<ExerciseVideo, 'id' | 'createdAt'> = {
   title: '', specialistName: '', specialistCredential: '', description: '', category: 'forca', exerciseNames: [],
-  suitableFor: ['geral'], level: 'todos', durationMinutes: 10, videoUrl: '', published: true,
+  suitableFor: ['geral'], level: 'todos', durationMinutes: 10, videoUrl: '', thumbnailUrl: '', published: true,
 };
 
 export default function VideoManager() {
@@ -27,6 +35,28 @@ export default function VideoManager() {
     patch({ suitableFor: form.suitableFor.includes(tag) ? form.suitableFor.filter((x) => x !== tag) : [...form.suitableFor, tag] });
   }
 
+  const thumbFileRef = useRef<HTMLInputElement>(null);
+
+  function handleVideoUrl(val: string) {
+    const p: Partial<typeof form> = { videoUrl: val };
+    if (!form.thumbnailUrl) {
+      const auto = videoThumbnailUrl(val);
+      if (auto) p.thumbnailUrl = auto;
+    }
+    patch(p);
+  }
+
+  async function handleThumbnailUpload(file?: File) {
+    if (!file) return;
+    setBusy(true); setMessage('Enviando capa...');
+    try {
+      const thumbnailUrl = await uploadExerciseThumbnail(file);
+      patch({ thumbnailUrl });
+      setMessage('Capa enviada com sucesso!');
+    } catch (e) { setMessage(e instanceof Error ? e.message : 'Falha no upload da capa.'); }
+    finally { setBusy(false); }
+  }
+
   async function handleUpload(file?: File) {
     if (!file) return;
     setBusy(true); setMessage('Enviando vídeo...');
@@ -42,8 +72,10 @@ export default function VideoManager() {
     if (!form.title.trim() || !form.specialistName.trim() || !form.videoUrl.trim()) {
       setMessage('Informe título, especialista e vídeo/link.'); return;
     }
+    const finalThumb = form.thumbnailUrl?.trim() || videoThumbnailUrl(form.videoUrl) || undefined;
     const next: ExerciseVideo[] = [{
       ...form,
+      thumbnailUrl: finalThumb,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
       exerciseNames: exerciseText.split(',').map((x) => x.trim()).filter(Boolean),
@@ -80,9 +112,34 @@ export default function VideoManager() {
           <div className="mt-2 flex flex-wrap gap-1.5">{VIDEO_SUITABILITY.map(([tag, label]) => <button type="button" key={tag} onClick={() => toggleTag(tag)} className={cn('rounded-full border px-2.5 py-1.5 text-[10px] font-bold', form.suitableFor.includes(tag) ? 'border-cyan-600 bg-cyan-600 text-white' : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300')}>{form.suitableFor.includes(tag) && <Check className="mr-1 inline h-3 w-3" />}{label}</button>)}</div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Field label="Link do vídeo"><div className="relative"><Link2 className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><TextInput value={form.videoUrl} onChange={(e) => patch({ videoUrl: e.target.value })} className="pl-10" placeholder="YouTube, Vimeo ou MP4" /></div></Field>
-            <Field label="Ou envie um arquivo" hint="MP4/WebM/MOV"><input ref={fileRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => void handleUpload(e.target.files?.[0])} /><Button variant="secondary" full onClick={() => fileRef.current?.click()} disabled={busy}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}Selecionar e enviar</Button></Field>
+            <Field label="Link do vídeo"><div className="relative"><Link2 className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><TextInput value={form.videoUrl} onChange={(e) => handleVideoUrl(e.target.value)} className="pl-10" placeholder="YouTube, Vimeo ou MP4" /></div></Field>
+            <Field label="Ou envie um arquivo" hint="MP4/WebM/MOV"><input ref={fileRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => void handleUpload(e.target.files?.[0])} /><Button variant="secondary" full onClick={() => fileRef.current?.click()} disabled={busy}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}Selecionar e enviar vídeo</Button></Field>
           </div>
+
+          <div className="mt-3">
+            <Field label="Capa / Thumbnail (opcional)" hint="detectada do YouTube ou envie uma foto/imagem">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <ImageIcon className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <TextInput value={form.thumbnailUrl ?? ''} onChange={(e) => patch({ thumbnailUrl: e.target.value })} className="pl-10" placeholder="https://… ou envie arquivo ao lado" />
+                </div>
+                <input ref={thumbFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => void handleThumbnailUpload(e.target.files?.[0])} />
+                <Button type="button" variant="secondary" onClick={() => thumbFileRef.current?.click()} disabled={busy} className="!px-3 !py-2 text-xs">
+                  <Upload className="h-3.5 w-3.5" /> Enviar foto
+                </Button>
+              </div>
+            </Field>
+            {form.thumbnailUrl && (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-10 w-16 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+                  <img src={form.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                </div>
+                <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Capa configurada</span>
+                <button type="button" onClick={() => patch({ thumbnailUrl: '' })} className="text-[10px] font-bold text-rose-500 hover:underline">Remover</button>
+              </div>
+            )}
+          </div>
+
           <label className="mt-4 flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200"><input type="checkbox" checked={form.published} onChange={(e) => patch({ published: e.target.checked })} className="accent-brand-600" /> Publicar imediatamente para pacientes</label>
           {message && <p className="mt-3 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{message}</p>}
           <Button onClick={publish} disabled={busy} className="mt-4"><Plus className="h-4 w-4" />Adicionar à videoteca</Button>

@@ -72,6 +72,48 @@ export async function uploadExerciseVideo(file: File): Promise<string> {
   return supabase!.storage.from('exercise-videos').getPublicUrl(path).data.publicUrl;
 }
 
+/** Upload para imagem de capa (thumbnail) no Supabase storage */
+export async function uploadExerciseThumbnail(file: File): Promise<string> {
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (!allowed.includes(file.type)) throw new Error('Formato de capa inválido. Use JPG, PNG ou WEBP.');
+  if (file.size > 10 * 1024 * 1024) throw new Error('A imagem deve ter no máximo 10 MB.');
+
+  if (!isSupabaseConfigured) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  const safeName = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+  const path = `thumbnails/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeName}`;
+  const { error } = await supabase!.storage.from('exercise-videos').upload(path, file, {
+    contentType: file.type,
+    cacheControl: '3600',
+  });
+  if (error) throw new Error(error.message);
+  return supabase!.storage.from('exercise-videos').getPublicUrl(path).data.publicUrl;
+}
+
+export function videoThumbnailUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes('youtube.com')) {
+      const id = parsed.searchParams.get('v');
+      return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
+    }
+    if (parsed.hostname === 'youtu.be') {
+      const id = parsed.pathname.slice(1);
+      return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function videoEmbedUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
