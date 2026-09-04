@@ -103,9 +103,10 @@ export default function ProfessionalPortal() {
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (ready && !account?.profile.professional) return <Navigate to="/app" replace />;
+  const effectiveProfessional = account?.profile.professional || user.professional;
+  if (ready && !effectiveProfessional) return <Navigate to="/app" replace />;
 
-  const professional = account!.profile.professional!;
+  const professional = effectiveProfessional!;
   const approved = links.filter((l) => l.status === 'aprovado');
   const pending = links.filter((l) => l.status === 'pendente');
 

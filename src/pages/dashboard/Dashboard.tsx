@@ -369,7 +369,9 @@ export default function Dashboard() {
   }
 
   if (!user) return <Navigate to="/login" replace />;
-  if (ready && data?.profile.professional) return <Navigate to="/profissional" replace />;
+  if (user.professional || (ready && data?.profile.professional)) {
+    return <Navigate to="/profissional" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 dark:bg-slate-950 lg:pb-8">
@@ -424,6 +426,15 @@ export default function Dashboard() {
                 className="inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-[10px] font-extrabold text-brand-700 transition-colors hover:bg-brand-100"
               >
                 <ShieldCheck className="h-3.5 w-3.5" /> Super Admin
+              </Link>
+            )}
+            {(user.professional || data?.profile.professional) && (
+              <Link
+                to="/profissional"
+                title="Acessar o Portal do Profissional de Saúde"
+                className="inline-flex items-center gap-1.5 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[10px] font-extrabold text-cyan-700 transition-colors hover:bg-cyan-100 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-300"
+              >
+                <Dumbbell className="h-3.5 w-3.5" /> Portal Profissional
               </Link>
             )}
             <Avatar name={profile?.name ?? user.name} className="h-9 w-9 text-xs" />

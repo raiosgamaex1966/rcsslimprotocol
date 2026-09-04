@@ -115,7 +115,11 @@ export async function signUp(payload: SignUpPayload): Promise<AuthResult> {
     email: payload.email.trim().toLowerCase(),
     password: payload.password,
     options: {
-      data: { name },
+      data: {
+        name,
+        role: payload.professional ? 'professional' : 'patient',
+        professional: payload.professional,
+      },
       emailRedirectTo: REDIRECT_URL,
     },
   });
@@ -222,8 +226,13 @@ export async function getSessionUser(): Promise<AuthUser | null> {
   const { data } = await supabase!.auth.getSession();
   const su = data.session?.user;
   if (!su) return null;
-  const meta = su.user_metadata as { name?: string } | undefined;
-  return { id: su.id, email: su.email ?? '', name: meta?.name ?? su.email?.split('@')[0] ?? 'Paciente' };
+  const meta = su.user_metadata as { name?: string; professional?: import('./types').ProfessionalInfo } | undefined;
+  return {
+    id: su.id,
+    email: su.email ?? '',
+    name: meta?.name ?? su.email?.split('@')[0] ?? 'Paciente',
+    professional: meta?.professional,
+  };
 }
 
 /** Assina mudanças de sessão. Retorna função para cancelar. */
@@ -241,8 +250,13 @@ export function subscribeAuth(cb: (user: AuthUser | null) => void): () => void {
       cb(null);
       return;
     }
-    const meta = su.user_metadata as { name?: string } | undefined;
-    cb({ id: su.id, email: su.email ?? '', name: meta?.name ?? su.email?.split('@')[0] ?? 'Paciente' });
+    const meta = su.user_metadata as { name?: string; professional?: import('./types').ProfessionalInfo } | undefined;
+    cb({
+      id: su.id,
+      email: su.email ?? '',
+      name: meta?.name ?? su.email?.split('@')[0] ?? 'Paciente',
+      professional: meta?.professional,
+    });
   });
   return () => data.subscription.unsubscribe();
 }

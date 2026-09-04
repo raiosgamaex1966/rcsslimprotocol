@@ -24,6 +24,15 @@ export default function Login() {
     const res = await signIn(email, password);
     setLoading(false);
     if (res.ok) {
+      // Verifica se o usuário é profissional para direcionar para o portal correto
+      const user = await import('../lib/backend').then((m) => m.getSessionUser());
+      if (user?.id) {
+        const pData = await import('../lib/backend').then((m) => m.loadPatientData(user.id));
+        if (pData?.profile.professional) {
+          navigate('/profissional');
+          return;
+        }
+      }
       navigate('/app');
     } else if (res.needsVerification) {
       navigate('/verificar-email', { state: { email } });

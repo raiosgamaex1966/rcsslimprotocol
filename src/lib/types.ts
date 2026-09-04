@@ -236,6 +236,7 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  professional?: ProfessionalInfo;
 }
 
 export interface SignUpPayload {
