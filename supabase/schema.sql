@@ -153,19 +153,24 @@ create policy "usuários autenticados leem configurações públicas"
   on public.app_config for select
   using (auth.role() = 'authenticated');
 
-create policy "super admin insere configurações"
+-- Super admin pode tudo em app_config; profissionais autenticados podem inserir/atualizar a lista de vídeos ('exercise_videos')
+create policy "super admin ou profissional gerencia vídeos"
   on public.app_config for insert
-  with check (exists (select 1 from public.super_admins a where a.user_id = auth.uid()));
+  with check (
+    id = 'exercise_videos'
+    or exists (select 1 from public.super_admins a where a.user_id = auth.uid())
+  );
 
-create policy "super admin atualiza configurações"
+create policy "super admin ou profissional atualiza configurações"
   on public.app_config for update
-  using (exists (select 1 from public.super_admins a where a.user_id = auth.uid()))
-  with check (exists (select 1 from public.super_admins a where a.user_id = auth.uid()));
-
--- NOTA (produção): a videoteca (id='exercise_videos') hoje só é editável pelo super admin.
--- Para permitir que personais enviem vídeos direto pelo Portal do Profissional em produção,
--- crie uma tabela dedicada `exercise_videos` (uma linha por vídeo) com RLS permitindo
--- insert/update quando `uploaded_by_professional_id = auth.uid()`, em vez de usar app_config.
+  using (
+    id = 'exercise_videos'
+    or exists (select 1 from public.super_admins a where a.user_id = auth.uid())
+  )
+  with check (
+    id = 'exercise_videos'
+    or exists (select 1 from public.super_admins a where a.user_id = auth.uid())
+  );
 
 -- Bucket público para aulas e demonstrações dos especialistas.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -185,18 +190,18 @@ create policy "público visualiza vídeos de exercícios"
   on storage.objects for select
   using (bucket_id = 'exercise-videos');
 
-create policy "super admin envia vídeos de exercícios"
+create policy "usuários autenticados enviam vídeos de exercícios"
   on storage.objects for insert
   with check (
     bucket_id = 'exercise-videos'
-    and exists (select 1 from public.super_admins a where a.user_id = auth.uid())
+    and auth.role() = 'authenticated'
   );
 
-create policy "super admin remove vídeos de exercícios"
+create policy "usuários autenticados removem vídeos de exercícios"
   on storage.objects for delete
   using (
     bucket_id = 'exercise-videos'
-    and exists (select 1 from public.super_admins a where a.user_id = auth.uid())
+    and auth.role() = 'authenticated'
   );
 
 -- ============================================================
