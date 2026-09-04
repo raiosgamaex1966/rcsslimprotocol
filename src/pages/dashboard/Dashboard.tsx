@@ -862,7 +862,7 @@ export default function Dashboard() {
 
             {tab === 'perfil' && (
               <div className="mt-6 animate-fade-up">
-                <ProfileTabBody data={data} isAdmin={isAdmin} userId={user.id} />
+                <ProfileTabBody data={data} isAdmin={isAdmin} userId={user.id} update={update} />
               </div>
             )}
           </>
@@ -912,35 +912,235 @@ export default function Dashboard() {
   );
 }
 
-/* ================= Aba Perfil ================= */
-
-function ProfileTabBody({ data, isAdmin, userId }: { data: PatientData | null; isAdmin?: boolean; userId: string }) {
+function ProfileTabBody({
+  data,
+  isAdmin,
+  userId,
+  update,
+}: {
+  data: PatientData | null;
+  isAdmin?: boolean;
+  userId: string;
+  update: (updater: (prev: PatientData) => PatientData) => void;
+}) {
   const { user, signOut } = useAuth();
   const p = data?.profile;
   const age = p?.birthDate ? ageFromBirth(p.birthDate) : null;
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(p?.name ?? '');
+  const [sex, setSex] = useState<import('../../lib/types').Sexo | ''>(p?.sex ?? '');
+  const [birthDate, setBirthDate] = useState(p?.birthDate ?? '');
+  const [phone, setPhone] = useState(p?.phone ?? '');
+  const [whatsapp, setWhatsapp] = useState(p?.whatsapp ?? '');
+  const [heightCm, setHeightCm] = useState(p?.heightCm ? String(p.heightCm) : '');
+  const [startWeightKg, setStartWeightKg] = useState(p?.startWeightKg ? String(p.startWeightKg) : '');
+  const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Sincroniza estado local caso os dados do paciente mudem
+  useEffect(() => {
+    if (p) {
+      setName(p.name ?? '');
+      setSex(p.sex ?? '');
+      setBirthDate(p.birthDate ?? '');
+      setPhone(p.phone ?? '');
+      setWhatsapp(p.whatsapp ?? '');
+      setHeightCm(p.heightCm ? String(p.heightCm) : '');
+      setStartWeightKg(p.startWeightKg ? String(p.startWeightKg) : '');
+    }
+  }, [p]);
+
+  function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    const h = heightCm ? parseFloat(heightCm.replace(',', '.')) : null;
+    const w = startWeightKg ? parseFloat(startWeightKg.replace(',', '.')) : null;
+
+    update((prev) => ({
+      ...prev,
+      profile: {
+        ...prev.profile,
+        name: name.trim() || prev.profile.name,
+        sex: sex,
+        birthDate: birthDate,
+        phone: phone.trim(),
+        whatsapp: whatsapp.trim(),
+        heightCm: Number.isFinite(h) ? h : null,
+        startWeightKg: Number.isFinite(w) ? w : null,
+      },
+    }));
+
+    setSavedSuccess(true);
+    setIsEditing(false);
+    window.setTimeout(() => setSavedSuccess(false), 2500);
+  }
+
   return (
     <div className="grid gap-5 lg:grid-cols-3">
       <div className="space-y-5 lg:col-span-2">
         <Card className="p-6">
-          <SectionTitle icon={<Scale className="h-4 w-4 text-brand-600" />} title="Meus dados" subtitle="informações do cadastro" />
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              ['Nome completo', p?.name ?? '—'],
-              ['Sexo', p?.sex ? (p.sex === 'feminino' ? 'Feminino' : p.sex === 'masculino' ? 'Masculino' : 'Outro') : '—'],
-              ['Data de nascimento', p?.birthDate ? new Date(p.birthDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'],
-              ['Idade', age != null ? `${age} anos` : '—'],
-              ['E-mail', p?.email ?? user?.email ?? '—'],
-              ['Telefone', p?.phone ?? '—'],
-              ['WhatsApp', p?.whatsapp ?? '—'],
-              ['Peso no cadastro', p?.startWeightKg != null ? `${p.startWeightKg.toLocaleString('pt-BR')} kg` : '—'],
-              ['Altura', p?.heightCm != null ? `${p.heightCm} cm` : '—'],
-            ].map(([k, v]) => (
-              <div key={k} className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{k}</p>
-                <p className="mt-0.5 truncate text-sm font-extrabold text-slate-800 dark:text-slate-100">{v}</p>
-              </div>
-            ))}
+          <div className="flex items-center justify-between">
+            <SectionTitle
+              icon={<Scale className="h-4 w-4 text-brand-600" />}
+              title="Meus dados"
+              subtitle="informações do cadastro"
+            />
+            <Button
+              variant="secondary"
+              onClick={() => setIsEditing((v) => !v)}
+              className="!py-1.5 !px-3 !text-xs font-bold"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              {isEditing ? 'Cancelar' : 'Editar dados'}
+            </Button>
           </div>
+
+          {savedSuccess && (
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 px-3.5 py-2 text-xs font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+              <CheckCircle2 className="h-4 w-4" /> Dados atualizados com sucesso!
+            </div>
+          )}
+
+          {isEditing ? (
+            <form onSubmit={handleSaveProfile} className="mt-4 space-y-4 animate-fade-in">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Nome completo
+                  </label>
+                  <TextInput
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Seu nome completo"
+                    className="mt-1 !py-2 text-xs"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Sexo biológico
+                  </label>
+                  <select
+                    value={sex}
+                    onChange={(e) => setSex(e.target.value as import('../../lib/types').Sexo)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="feminino">Feminino</option>
+                    <option value="masculino">Masculino</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Data de nascimento
+                  </label>
+                  <TextInput
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                    className="mt-1 !py-2 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    E-mail (fixo da conta)
+                  </label>
+                  <TextInput
+                    value={p?.email ?? user?.email ?? ''}
+                    disabled
+                    className="mt-1 !py-2 text-xs opacity-60 cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Telefone
+                  </label>
+                  <TextInput
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(11) 99999-9999"
+                    className="mt-1 !py-2 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    WhatsApp
+                  </label>
+                  <TextInput
+                    value={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.value)}
+                    placeholder="(11) 99999-9999"
+                    className="mt-1 !py-2 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Peso inicial (kg)
+                  </label>
+                  <TextInput
+                    type="number"
+                    step="0.1"
+                    value={startWeightKg}
+                    onChange={(e) => setStartWeightKg(e.target.value)}
+                    placeholder="Ex: 84.5"
+                    className="mt-1 !py-2 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Altura (cm)
+                  </label>
+                  <TextInput
+                    type="number"
+                    value={heightCm}
+                    onChange={(e) => setHeightCm(e.target.value)}
+                    placeholder="Ex: 172"
+                    className="mt-1 !py-2 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setIsEditing(false)}
+                  className="!py-2 !text-xs"
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" className="!py-2 !px-5 !text-xs font-bold">
+                  Salvar dados
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                ['Nome completo', p?.name ?? '—'],
+                ['Sexo', p?.sex ? (p.sex === 'feminino' ? 'Feminino' : p.sex === 'masculino' ? 'Masculino' : 'Outro') : '—'],
+                ['Data de nascimento', p?.birthDate ? new Date(p.birthDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'],
+                ['Idade', age != null ? `${age} anos` : '—'],
+                ['E-mail', p?.email ?? user?.email ?? '—'],
+                ['Telefone', p?.phone ?? '—'],
+                ['WhatsApp', p?.whatsapp ?? '—'],
+                ['Peso no cadastro', p?.startWeightKg != null ? `${p.startWeightKg.toLocaleString('pt-BR')} kg` : '—'],
+                ['Altura', p?.heightCm != null ? `${p.heightCm} cm` : '—'],
+              ].map(([k, v]) => (
+                <div key={k} className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{k}</p>
+                  <p className="mt-0.5 truncate text-sm font-extrabold text-slate-800 dark:text-slate-100">{v}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         <PatientConnections userId={userId} name={p?.name ?? user?.name ?? 'Paciente'} email={p?.email ?? user?.email ?? ''} />
