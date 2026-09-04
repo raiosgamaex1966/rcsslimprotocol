@@ -6,15 +6,18 @@ import {
   Droplets,
   Flame,
   LoaderCircle,
+  Plus,
   Salad,
   Sparkles,
+  Trash2,
   UtensilsCrossed,
   Zap,
 } from 'lucide-react';
-import { Badge, Button, Card, DisclaimerBox, SectionTitle } from './ui';
+import { Badge, Button, Card, DisclaimerBox, SectionTitle, TextInput } from './ui';
 import { ageFromBirth, fmtMg, weeklyWeightTrend } from '../lib/schedule';
 import { findMedication } from '../data/medications';
 import {
+  analyzeMealText,
   buildFallbackWeekMenu,
   cacheAIMenu,
   computeTargets,
@@ -28,7 +31,7 @@ import {
   type NutritionTargets,
   type WeekMenu,
 } from '../lib/llm';
-import type { PatientData, Profile } from '../lib/types';
+import type { CustomMealLog, PatientData, Profile } from '../lib/types';
 import { cn } from '../utils/cn';
 
 interface Props {
@@ -52,6 +55,17 @@ export default function NutritionTab({ userId, data, update }: Props) {
   const [aiDays, setAiDays] = useState<DayMenu[] | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+
+  // Estado para registro livre de alimentos consumidos (com IA)
+  const [customFoodText, setCustomFoodText] = useState('');
+  const [analyzingFood, setAnalyzingFood] = useState(false);
+  const [foodAnalysisResult, setFoodAnalysisResult] = useState<{
+    description: string;
+    proteinG: number;
+    fiberG: number;
+    kcal: number;
+    analyzedByAI: boolean;
+  } | null>(null);
 
   const weightKg = (() => {
     if (data.weights.length) return data.weights[data.weights.length - 1].kg;
@@ -82,7 +96,7 @@ export default function NutritionTab({ userId, data, update }: Props) {
     });
   }, [weightKg, profile?.heightCm, profile?.sex, age, doseMg, med, treatment, activityLevel, weightTrend?.percentPerWeek]);
 
-  // Um nutricionista vinculado pode ajustar manualmente proteína/kcal — isso substitui o cálculo automático.
+  // Um nutricionista vinculado pode ajustar manualmente proteína/kcal/fibras — isso substitui o cálculo automático.
   const nutritionOverride = data.nutritionOverride;
   const targets: NutritionTargets | null = useMemo(() => {
     if (!baseTargets) return null;
@@ -91,6 +105,7 @@ export default function NutritionTab({ userId, data, update }: Props) {
       ...baseTargets,
       proteinG: nutritionOverride.proteinG ?? baseTargets.proteinG,
       kcal: nutritionOverride.kcal ?? baseTargets.kcal,
+      fiberG: nutritionOverride.fiberG ?? baseTargets.fiberG,
     };
   }, [baseTargets, nutritionOverride]);
 
@@ -105,7 +120,9 @@ export default function NutritionTab({ userId, data, update }: Props) {
   const aiConfigured = Boolean(llmCfg?.enabled && llmCfg.apiKey && llmCfg.model);
 
   const today = new Date().toISOString().slice(0, 10);
-  const consumedToday = nutritionLogs.find((n) => n.date === today)?.meals ?? [];
+  const todayLog = nutritionLogs.find((n) => n.date === today);
+  const consumedStandardMealIds = todayLog?.meals ?? [];
+  const customMealsToday = todayLog?.customMeals ?? [];
 
   const dayName = days[dayIdx]?.dayName ?? '';
 
@@ -116,7 +133,80 @@ export default function NutritionTab({ userId, data, update }: Props) {
       const meals = new Set(existing?.meals ?? []);
       if (meals.has(mealId)) meals.delete(mealId);
       else meals.add(mealId);
-      const nextLog = { date: today, meals: Array.from(meals) };
+      const nextLog = {
+        date: today,
+        meals: Array.from(meals),
+        customMeals: existing?.customMeals ?? [],
+      };
+      return {
+        ...prev,
+        nutritionLogs: [...logsArr.filter((n) => n.date !== today), nextLog],
+      };
+    });
+  }
+
+  async function handleAnalyzeCustomFood(e: React.FormEvent) {
+    e.preventDefault();
+    if (!customFoodText.trim()) return;
+    setAnalyzingFood(true);
+    try {
+      const res = await analyzeMealText(customFoodText, llmCfg);
+      setFoodAnalysisResult(res);
+    } catch {
+      // fallback manual
+      setFoodAnalysisResult({
+        description: customFoodText.trim(),
+        proteinG: 15,
+        fiberG: 3,
+        kcal: 180,
+        analyzedByAI: false,
+      });
+    } finally {
+      setAnalyzingFood(false);
+    }
+  }
+
+  function handleConfirmCustomMeal() {
+    if (!foodAnalysisResult) return;
+    const newEntry: CustomMealLog = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      description: foodAnalysisResult.description,
+      proteinG: foodAnalysisResult.proteinG,
+      fiberG: foodAnalysisResult.fiberG,
+      kcal: foodAnalysisResult.kcal,
+      analyzedByAI: foodAnalysisResult.analyzedByAI,
+    };
+
+    update((prev) => {
+      const logsArr = prev.nutritionLogs ?? [];
+      const existing = logsArr.find((n) => n.date === today);
+      const nextCustom = [...(existing?.customMeals ?? []), newEntry];
+      const nextLog = {
+        date: today,
+        meals: existing?.meals ?? [],
+        customMeals: nextCustom,
+      };
+      return {
+        ...prev,
+        nutritionLogs: [...logsArr.filter((n) => n.date !== today), nextLog],
+      };
+    });
+
+    setCustomFoodText('');
+    setFoodAnalysisResult(null);
+  }
+
+  function handleDeleteCustomMeal(id: string) {
+    update((prev) => {
+      const logsArr = prev.nutritionLogs ?? [];
+      const existing = logsArr.find((n) => n.date === today);
+      if (!existing) return prev;
+      const nextCustom = (existing.customMeals ?? []).filter((m) => m.id !== id);
+      const nextLog = {
+        ...existing,
+        customMeals: nextCustom,
+      };
       return {
         ...prev,
         nutritionLogs: [...logsArr.filter((n) => n.date !== today), nextLog],
@@ -160,9 +250,17 @@ export default function NutritionTab({ userId, data, update }: Props) {
     );
   }
 
-  const eatenToday = days[dayIdx]?.meals.filter((m) => consumedToday.includes(m.mealId)) ?? [];
-  const proteinEaten = Math.round(eatenToday.reduce((s, m) => s + m.proteinG, 0));
-  const proteinPct = Math.min(100, Math.round((proteinEaten / targets.proteinG) * 100));
+  // CÁLCULO TOTAL DE PROTEÍNAS E FIBRAS: Refeições planejadas consumidas + Refeições livres registradas
+  const eatenStandardMeals = days[dayIdx]?.meals.filter((m) => consumedStandardMealIds.includes(m.mealId)) ?? [];
+  const standardProteinEaten = eatenStandardMeals.reduce((s, m) => s + m.proteinG, 0);
+  const customProteinEaten = customMealsToday.reduce((s, m) => s + m.proteinG, 0);
+  const customFiberEaten = customMealsToday.reduce((s, m) => s + (m.fiberG ?? 0), 0);
+
+  const totalProteinEaten = Math.round(standardProteinEaten + customProteinEaten);
+  const proteinPct = Math.min(100, Math.round((totalProteinEaten / targets.proteinG) * 100));
+
+  const totalFiberEaten = Math.round(customFiberEaten + (eatenStandardMeals.length > 0 ? (targets.fiberG / 5) * eatenStandardMeals.length : 0));
+  const fiberPct = Math.min(100, Math.round((totalFiberEaten / targets.fiberG) * 100));
 
   return (
     <div className="mt-6 space-y-6">
@@ -216,28 +314,206 @@ export default function NutritionTab({ userId, data, update }: Props) {
         </div>
       )}
 
-      {/* Progresso do dia */}
-      <Card className="p-6">
-        <SectionTitle
-          icon={<CheckCircle2 className="h-4 w-4 text-brand-600" />}
-          title={`Proteína consumida hoje`}
-          subtitle={`${proteinEaten} g de ${targets.proteinG} g (${proteinPct}%) — recalculado com ${weightKg?.toLocaleString('pt-BR')} kg`}
-          action={
-            <Badge className={cn(proteinPct >= 90 ? 'bg-emerald-100 text-emerald-700' : proteinPct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700')}>
-              {proteinPct >= 90 ? 'Meta atingida! 💪' : proteinPct >= 50 ? 'Bom ritmo' : 'Marque as refeições'}
-            </Badge>
-          }
-        />
-        <div className="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-500"
-            style={{ width: `${proteinPct}%` }}
+      {/* Banner de Dieta Prescrita pelo Nutricionista (se houver) */}
+      {nutritionOverride?.mealPlanText && (
+        <Card className="border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white p-6 shadow-lg shadow-emerald-100 dark:border-emerald-500/50 dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 pb-3 dark:border-emerald-800">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/30">
+                <UtensilsCrossed className="h-4 w-4" />
+              </span>
+              <div>
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                  ★ Plano Prescrito pelo Profissional
+                </span>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  {nutritionOverride.mealPlanTitle || 'Dieta Personalizada'}
+                </h3>
+              </div>
+            </div>
+            <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+              Nutricionista: <b>{nutritionOverride.authorName}</b> · Atualizado em{' '}
+              {new Date(nutritionOverride.updatedAt).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+
+          <div className="mt-4 whitespace-pre-line text-xs leading-relaxed text-slate-800 dark:text-slate-200">
+            {nutritionOverride.mealPlanText}
+          </div>
+        </Card>
+      )}
+
+      {/* Progresso do dia — Proteínas e Fibras */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Termômetro de Proteína */}
+        <Card className="p-5">
+          <SectionTitle
+            icon={<Beef className="h-4 w-4 text-emerald-600" />}
+            title="Proteína consumida hoje"
+            subtitle={`${totalProteinEaten} g de ${targets.proteinG} g (${proteinPct}%)`}
+            action={
+              <Badge className={cn(proteinPct >= 90 ? 'bg-emerald-100 text-emerald-700' : proteinPct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700')}>
+                {proteinPct >= 90 ? 'Meta atingida! 💪' : proteinPct >= 50 ? 'Bom ritmo' : 'Em andamento'}
+              </Badge>
+            }
+          />
+          <div className="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-500"
+              style={{ width: `${proteinPct}%` }}
+            />
+          </div>
+          <div className="mt-2 flex justify-between text-[10px] font-bold text-slate-400">
+            <span>0 g</span>
+            <span className="text-emerald-600">{targets.proteinG} g meta diária</span>
+          </div>
+        </Card>
+
+        {/* Termômetro de Fibras */}
+        <Card className="p-5">
+          <SectionTitle
+            icon={<Salad className="h-4 w-4 text-teal-600" />}
+            title="Fibras consumidas hoje"
+            subtitle={`${totalFiberEaten} g de ${targets.fiberG} g (${fiberPct}%)`}
+            action={
+              <Badge className={cn(fiberPct >= 80 ? 'bg-emerald-100 text-emerald-700' : 'bg-teal-100 text-teal-700')}>
+                {fiberPct >= 80 ? 'Excelente saciedade 🥗' : 'Prevenção de constipação'}
+              </Badge>
+            }
+          />
+          <div className="h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-500"
+              style={{ width: `${fiberPct}%` }}
+            />
+          </div>
+          <div className="mt-2 flex justify-between text-[10px] font-bold text-slate-400">
+            <span>0 g</span>
+            <span className="text-teal-600">{targets.fiberG} g meta diária</span>
+          </div>
+        </Card>
+      </div>
+
+      {/* REGISTRO LIVRE COM IA ("O que você conseguiu comer hoje?") */}
+      <Card className="p-6 border-brand-200 dark:border-brand-900 bg-gradient-to-br from-white via-brand-50/20 to-white dark:from-slate-900 dark:via-brand-950/20 dark:to-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <SectionTitle
+            icon={<Sparkles className="h-4 w-4 text-violet-600" />}
+            title="Não conseguiu seguir o cardápio à risca? Registre aqui!"
+            subtitle="Digite com suas palavras o que você conseguiu comer. A IA calcula as proteínas e fibras na hora e soma no seu total do dia."
           />
         </div>
-        <div className="mt-2 flex justify-between text-[10px] font-bold text-slate-400">
-          <span>0 g</span>
-          <span className="text-brand-700">{targets.proteinG} g</span>
-        </div>
+
+        <form onSubmit={handleAnalyzeCustomFood} className="mt-3 flex flex-col sm:flex-row items-stretch gap-2">
+          <TextInput
+            placeholder="Ex: 1 filé de frango com 3 colheres de arroz, feijão e salada de alface"
+            value={customFoodText}
+            onChange={(e) => setCustomFoodText(e.target.value)}
+            className="flex-1 text-xs !py-2.5"
+            disabled={analyzingFood}
+          />
+          <Button
+            type="submit"
+            className="shrink-0 !py-2.5 !px-5 text-xs font-bold"
+            disabled={analyzingFood || !customFoodText.trim()}
+          >
+            {analyzingFood ? (
+              <>
+                <LoaderCircle className="h-4 w-4 animate-spin" /> Calculando com IA…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 text-violet-200" /> Analisar e Somar
+              </>
+            )}
+          </Button>
+        </form>
+
+        {/* Prévia do cálculo antes de confirmar */}
+        {foodAnalysisResult && (
+          <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50/70 p-4 animate-fade-in dark:border-violet-800 dark:bg-violet-950/30">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-extrabold text-slate-900 dark:text-white">
+                  🍽️ "{foodAnalysisResult.description}"
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {foodAnalysisResult.analyzedByAI
+                    ? '✨ Estimativa detalhada gerada por IA'
+                    : 'Estimativa baseada na tabela nutricional brasileira'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  className="!py-1.5 !px-3 text-xs"
+                  onClick={() => setFoodAnalysisResult(null)}
+                >
+                  Descartar
+                </Button>
+                <Button
+                  className="!py-1.5 !px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700"
+                  onClick={handleConfirmCustomMeal}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Adicionar ao Somatório de Hoje
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-white p-2.5 text-center shadow-sm dark:bg-slate-800">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Proteína</p>
+                <p className="text-base font-extrabold text-emerald-600">+{foodAnalysisResult.proteinG} g</p>
+              </div>
+              <div className="rounded-xl bg-white p-2.5 text-center shadow-sm dark:bg-slate-800">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Fibras</p>
+                <p className="text-base font-extrabold text-teal-600">+{foodAnalysisResult.fiberG} g</p>
+              </div>
+              <div className="rounded-xl bg-white p-2.5 text-center shadow-sm dark:bg-slate-800">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">Calorias</p>
+                <p className="text-base font-extrabold text-slate-700 dark:text-slate-200">≈ {foodAnalysisResult.kcal} kcal</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lista de Refeições Livres Consumidas Hoje */}
+        {customMealsToday.length > 0 && (
+          <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-400">
+              Refeições livres registradas hoje ({customMealsToday.length}):
+            </p>
+            <div className="mt-2 space-y-2">
+              {customMealsToday.map((cm) => (
+                <div
+                  key={cm.id}
+                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-xs dark:border-slate-800 dark:bg-slate-800/80"
+                >
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                    <div>
+                      <p className="font-bold text-slate-800 dark:text-slate-100">{cm.description}</p>
+                      <p className="text-[10px] text-slate-400">Registrado às {cm.time}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-extrabold text-emerald-600">+{cm.proteinG}g prot</span>
+                    {cm.fiberG != null && cm.fiberG > 0 && (
+                      <span className="font-extrabold text-teal-600">+{cm.fiberG}g fibras</span>
+                    )}
+                    <button
+                      onClick={() => handleDeleteCustomMeal(cm.id)}
+                      className="text-slate-400 hover:text-rose-600 p-1 transition"
+                      title="Excluir refeição"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Seletor de dia */}

@@ -529,6 +529,9 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
   const targets = weight && data.profile.heightCm ? computeTargets({ weightKg: weight, heightCm: data.profile.heightCm, sex: data.profile.sex || 'masculino', age, doseMg: 0, medMaxDose: 1, activityLevel: activity }) : null;
   const [proteinOverride, setProteinOverride] = useState(String(data.nutritionOverride?.proteinG ?? ''));
   const [kcalOverride, setKcalOverride] = useState(String(data.nutritionOverride?.kcal ?? ''));
+  const [fiberOverride, setFiberOverride] = useState(String(data.nutritionOverride?.fiberG ?? ''));
+  const [mealPlanTitle, setMealPlanTitle] = useState(data.nutritionOverride?.mealPlanTitle ?? '');
+  const [mealPlanText, setMealPlanText] = useState(data.nutritionOverride?.mealPlanText ?? '');
   const [savedOverride, setSavedOverride] = useState(false);
   const nutritionLogs = data.nutritionLogs ?? [];
   const recentCompliance = nutritionLogs.slice(-7);
@@ -546,7 +549,7 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
                 ['Proteína/dia', `${data.nutritionOverride?.proteinG ?? targets.proteinG} g`],
                 ['Energia', `≈ ${data.nutritionOverride?.kcal ?? targets.kcal} kcal`],
                 ['Água', `≈ ${(targets.waterMl / 1000).toLocaleString('pt-BR')} L`],
-                ['Fibras', `${targets.fiberG} g`],
+                ['Fibras', `${data.nutritionOverride?.fiberG ?? targets.fiberG} g`],
               ].map(([k, v]) => (
                 <div key={k} className="rounded-xl bg-emerald-50 px-3 py-2.5 dark:bg-emerald-500/10">
                   <p className="text-[9px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">{k}</p>
@@ -560,39 +563,77 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
         </Card>
         <Card className="p-6">
           <SectionTitle icon={<ClipboardList className="h-4 w-4 text-emerald-600" />} title="Adesão à dieta" subtitle="últimos 7 dias" />
-          <p className="text-3xl font-extrabold text-slate-900 dark:text-white">{recentCompliance.reduce((s, l) => s + l.meals.length, 0)}</p>
-          <p className="text-[10px] font-semibold text-slate-400">refeições marcadas como consumidas</p>
+          <p className="text-3xl font-extrabold text-slate-900 dark:text-white">{recentCompliance.reduce((s, l) => s + l.meals.length + (l.customMeals?.length ?? 0), 0)}</p>
+          <p className="text-[10px] font-semibold text-slate-400">refeições registradas e consumidas</p>
         </Card>
       </div>
 
       <Card className="p-6">
         <SectionTitle icon={<Sparkles className="h-4 w-4 text-emerald-600" />} title="Ajustar metas manualmente" subtitle="substitui o cálculo automático exibido ao paciente" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Proteína/dia (g)" hint="deixe vazio para usar o cálculo automático">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Proteína/dia (g)" hint="deixe vazio p/ auto">
             <TextInput type="number" min="0" placeholder={targets ? String(targets.proteinG) : ''} value={proteinOverride} onChange={(e) => setProteinOverride(e.target.value)} />
           </Field>
-          <Field label="Energia/dia (kcal)" hint="deixe vazio para usar o cálculo automático">
+          <Field label="Energia/dia (kcal)" hint="deixe vazio p/ auto">
             <TextInput type="number" min="0" placeholder={targets ? String(targets.kcal) : ''} value={kcalOverride} onChange={(e) => setKcalOverride(e.target.value)} />
           </Field>
+          <Field label="Fibras/dia (g)" hint="deixe vazio p/ auto (28g)">
+            <TextInput type="number" min="0" placeholder={targets ? String(targets.fiberG) : '28'} value={fiberOverride} onChange={(e) => setFiberOverride(e.target.value)} />
+          </Field>
         </div>
+      </Card>
+
+      <Card className="p-6">
+        <SectionTitle
+          icon={<UtensilsCrossed className="h-4 w-4 text-emerald-600" />}
+          title="Plano Alimentar / Cardápio Prescrito"
+          subtitle="Aparecerá com destaque oficial na tela do paciente"
+        />
+        <div className="space-y-4">
+          <Field label="Título do Plano Alimentar (ex: Dieta de Adaptação GLP-1)" required>
+            <TextInput
+              placeholder="Ex: Protocolo Nutricional Fase 1 — Foco em Proteínas e Saciedade"
+              value={mealPlanTitle}
+              onChange={(e) => setMealPlanTitle(e.target.value)}
+            />
+          </Field>
+          <Field
+            label="Detalhamento do Cardápio / Refeições Prescritas"
+            hint="Descreva os horários, opções de café, almoço, lanches, jantar e substituições que o paciente deve seguir."
+            required
+          >
+            <textarea
+              rows={8}
+              value={mealPlanText}
+              onChange={(e) => setMealPlanText(e.target.value)}
+              placeholder="Exemplo:&#10;• Café da manhã (07h30): 2 ovos mexidos + 1 fatia de pão integral + café sem açúcar&#10;• Colação (10h00): 1 dose de whey protein ou iogurte natural com 1 colher de chia&#10;• Almoço (12h30): 120g de filé de frango ou peixe grelhado + 3 colheres de arroz + legumes à vontade&#10;• Lanche da tarde (16h00): 1 fruta + mix de castanhas&#10;• Jantar (19h30): Omelete de 2 ovos com queijo branco ou salada completa com atum"
+              className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            />
+          </Field>
+        </div>
+
         <Button
-          className="mt-3 !px-4 !py-2 text-xs"
+          className="mt-4 !px-5 !py-2.5 text-xs font-bold"
           onClick={() => {
             update((prev) => ({
               ...prev,
               nutritionOverride: {
+                ...prev.nutritionOverride,
                 proteinG: proteinOverride.trim() ? Number(proteinOverride) : undefined,
                 kcal: kcalOverride.trim() ? Number(kcalOverride) : undefined,
+                fiberG: fiberOverride.trim() ? Number(fiberOverride) : undefined,
+                mealPlanTitle: mealPlanTitle.trim() || undefined,
+                mealPlanText: mealPlanText.trim() || undefined,
                 authorName: professionalName,
                 updatedAt: new Date().toISOString(),
               },
             }));
             setSavedOverride(true);
-            window.setTimeout(() => setSavedOverride(false), 2000);
+            window.setTimeout(() => setSavedOverride(false), 2500);
           }}
         >
-          {savedOverride ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
-          {savedOverride ? 'Metas atualizadas!' : 'Salvar ajuste'}
+          {savedOverride ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+          {savedOverride ? 'Dieta e Metas Salvas com Sucesso!' : 'Salvar Plano Alimentar do Paciente'}
         </Button>
       </Card>
 

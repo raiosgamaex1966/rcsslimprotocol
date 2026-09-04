@@ -430,11 +430,154 @@ export function cacheAIMenu(userId: string, menu: DayMenu[], signature = ''): vo
   localStorage.setItem(`minhacaneta_ai_menu_${userId}_${weekKey()}_${signature}`, JSON.stringify(menu));
 }
 
-/* ---------- utilitário: dose atual da semana ---------- */
-
 export function currentDoseMg(treatment: Treatment | null): number {
   if (!treatment) return 0;
   return doseAtDate(treatment, new Date());
+}
+
+/* ---------- Análise de Alimento Livre (IA + Heurística de Fallback) ---------- */
+
+export interface AnalyzedMealResult {
+  description: string;
+  proteinG: number;
+  fiberG: number;
+  kcal: number;
+  analyzedByAI: boolean;
+}
+
+export async function analyzeMealText(text: string, cfg: LLMConfig | null): Promise<AnalyzedMealResult> {
+  const clean = text.trim();
+  if (!clean) return { description: '', proteinG: 0, fiberG: 0, kcal: 0, analyzedByAI: false };
+
+  // Se tiver LLM configurada, tenta obter análise precisa via prompt
+  if (cfg?.enabled && cfg.apiKey && cfg.model) {
+    try {
+      const prompt = `Você é um nutricionista especialista em cálculo de macronutrientes de alimentos da culinária brasileira.
+O paciente relatou que comeu: "${clean}".
+
+Calcule com base em porções habituais do Brasil:
+1) Proteínas totais em gramas (proteinG)
+2) Fibras alimentares totais em gramas (fiberG)
+3) Calorias totais estimadas (kcal)
+
+Responda ESTRITAMENTE em formato JSON puro, sem markdown nem explicações adicionais, no seguinte formato:
+{"proteinG": 28, "fiberG": 4, "kcal": 350}`;
+
+      const resp = await requestLLM(cfg, prompt, 200);
+      const jsonStr = resp.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const match = jsonStr.match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        return {
+          description: clean,
+          proteinG: Math.max(0, Math.round(Number(parsed.proteinG) || 0)),
+          fiberG: Math.max(0, Math.round(Number(parsed.fiberG) || 0)),
+          kcal: Math.max(0, Math.round(Number(parsed.kcal) || 0)),
+          analyzedByAI: true,
+        };
+      }
+    } catch (e) {
+      console.warn('Falha na estimativa por IA, usando fallback heurístico:', e);
+    }
+  }
+
+  // Fallback heurístico inteligente baseado no vocabulário de alimentos comuns
+  const lower = clean.toLowerCase();
+  let prot = 0;
+  let fiber = 0;
+  let cal = 0;
+
+  // Proteínas
+  if (lower.includes('ovo') || lower.includes('omelete')) {
+    const qty = lower.includes('2') ? 2 : lower.includes('3') ? 3 : 1;
+    prot += qty * 6;
+    cal += qty * 75;
+  }
+  if (lower.includes('frango') || lower.includes('galinha')) {
+    prot += 30;
+    cal += 165;
+  }
+  if (lower.includes('carne') || lower.includes('bife') || lower.includes('hambúrguer') || lower.includes('patinho')) {
+    prot += 32;
+    cal += 210;
+  }
+  if (lower.includes('peixe') || lower.includes('tilapia') || lower.includes('tilápia') || lower.includes('salmão')) {
+    prot += 26;
+    cal += 180;
+  }
+  if (lower.includes('whey') || lower.includes('proteína') || lower.includes('shake')) {
+    prot += 24;
+    cal += 120;
+  }
+  if (lower.includes('iogurte')) {
+    prot += 10;
+    cal += 110;
+  }
+  if (lower.includes('queijo') || lower.includes('cottage') || lower.includes('ricota')) {
+    prot += 12;
+    cal += 140;
+  }
+  if (lower.includes('tofu')) {
+    prot += 15;
+    cal += 120;
+  }
+
+  // Fibras e carboidratos
+  if (lower.includes('feijão') || lower.includes('lentilha') || lower.includes('grão de bico')) {
+    prot += 7;
+    fiber += 6;
+    cal += 110;
+  }
+  if (lower.includes('arroz')) {
+    prot += 3;
+    fiber += 1.5;
+    cal += 130;
+  }
+  if (lower.includes('batata') || lower.includes('mandioca') || lower.includes('aipim')) {
+    prot += 2;
+    fiber += 3;
+    cal += 140;
+  }
+  if (lower.includes('aveia')) {
+    prot += 4;
+    fiber += 4;
+    cal += 110;
+  }
+  if (lower.includes('pão') || lower.includes('torrada')) {
+    prot += 4;
+    fiber += 2;
+    cal += 130;
+  }
+  if (lower.includes('salada') || lower.includes('alface') || lower.includes('tomate') || lower.includes('legume') || lower.includes('brócolis') || lower.includes('couve')) {
+    prot += 2;
+    fiber += 4;
+    cal += 50;
+  }
+  if (lower.includes('banana') || lower.includes('maçã') || lower.includes('fruta') || lower.includes('laranja') || lower.includes('mamão')) {
+    prot += 1;
+    fiber += 3;
+    cal += 90;
+  }
+  if (lower.includes('chia') || lower.includes('linhaça') || lower.includes('castanha')) {
+    prot += 3;
+    fiber += 4;
+    cal += 90;
+  }
+
+  // Se nenhum alimento conhecido foi detectado mas o usuário digitou algo
+  if (prot === 0 && fiber === 0 && cal === 0) {
+    prot = 10;
+    fiber = 2;
+    cal = 150;
+  }
+
+  return {
+    description: clean,
+    proteinG: Math.round(prot),
+    fiberG: Math.round(fiber),
+    kcal: Math.round(cal),
+    analyzedByAI: false,
+  };
 }
 
 export type { FoodItem };

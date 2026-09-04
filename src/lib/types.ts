@@ -62,11 +62,22 @@ export interface ProfessionalNotes {
   personal?: { text: string; authorName: string; updatedAt: string };
 }
 
-/** Ajustes manuais que um profissional pode aplicar por cima do cálculo automático. */
+/** Ajustes manuais e dieta prescrita pelo nutricionista. */
 export interface NutritionOverride {
   proteinG?: number;
   kcal?: number;
+  fiberG?: number;
   note?: string;
+  mealPlanTitle?: string;
+  mealPlanText?: string;
+  prescribedMeals?: {
+    name: string;
+    time?: string;
+    description: string;
+    proteinG?: number;
+    fiberG?: number;
+    kcal?: number;
+  }[];
   authorName: string;
   updatedAt: string;
 }
@@ -139,10 +150,22 @@ export interface WeightEntry {
   kg: number;
 }
 
-/** Registro de refeições consumidas em um dia (controle de proteína). */
+/** Refeição livre/customizada que o paciente de fato comeu. */
+export interface CustomMealLog {
+  id: string;
+  time: string; // "13:30"
+  description: string; // Ex: "1 filé de frango com 3 colheres de arroz e salada"
+  proteinG: number;
+  fiberG?: number;
+  kcal?: number;
+  analyzedByAI?: boolean;
+}
+
+/** Registro de refeições consumidas em um dia (controle de proteína e fibras). */
 export interface NutritionLog {
   date: string; // yyyy-mm-dd
-  meals: string[]; // ids das refeições marcadas como consumidas
+  meals: string[]; // ids das refeições do cardápio padrão marcadas como consumidas
+  customMeals?: CustomMealLog[]; // refeições livres inseridas pelo paciente
 }
 
 export type ActivityLevel = 'sedentario' | 'leve' | 'moderado' | 'ativo';
