@@ -59,8 +59,25 @@ function usePatientData(userId: string, fallback: { name: string; email: string 
       if (d) {
         setData(d);
       } else {
+        let metaProf: import('../lib/types').ProfessionalInfo | undefined = undefined;
+        try {
+          const stored = localStorage.getItem(`prof_${fallback.email.trim().toLowerCase()}`);
+          if (stored) metaProf = JSON.parse(stored);
+        } catch {
+          // ignore
+        }
         const initial: PatientData = {
-          profile: { name: fallback.name, sex: '', birthDate: '', email: fallback.email, phone: '', whatsapp: '', startWeightKg: null, heightCm: null },
+          profile: {
+            name: fallback.name,
+            sex: '',
+            birthDate: '',
+            email: fallback.email,
+            phone: '',
+            whatsapp: '',
+            startWeightKg: null,
+            heightCm: null,
+            professional: metaProf,
+          },
           treatment: null,
           logs: [],
           weights: [],

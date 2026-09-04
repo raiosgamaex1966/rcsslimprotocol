@@ -59,18 +59,42 @@ export default function ProfessionalPortal() {
     if (!user?.id) return;
     let on = true;
     (async () => {
-      const acc = await loadPatientData(user.id);
+      let acc = await loadPatientData(user.id);
       if (!on) return;
+
+      // Se o banco ainda não tinha os dados do profissional mas eles estão no user.professional (metadata do Supabase):
+      if ((!acc || !acc.profile.professional) && user.professional) {
+        const updatedProfile: import('../../lib/types').Profile = {
+          name: user.name,
+          sex: 'outro',
+          birthDate: '',
+          email: user.email,
+          phone: '',
+          whatsapp: '',
+          startWeightKg: null,
+          heightCm: null,
+          professional: user.professional,
+        };
+        const updatedAcc: PatientData = {
+          profile: updatedProfile,
+          treatment: null,
+          logs: [],
+          weights: [],
+        };
+        await savePatientData(user.id, updatedAcc);
+        acc = updatedAcc;
+      }
+
       setAccount(acc);
       setReady(true);
-      if (acc?.profile.professional) {
+      if (acc?.profile.professional || user.professional) {
         setLinks(await listLinksForProfessional(user.id));
       }
     })();
     return () => {
       on = false;
     };
-  }, [user?.id]);
+  }, [user?.id, user?.professional, user?.name, user?.email]);
 
   useEffect(() => {
     if (!selectedPatientId) {

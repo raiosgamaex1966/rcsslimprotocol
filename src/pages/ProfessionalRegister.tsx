@@ -56,6 +56,12 @@ export default function ProfessionalRegister() {
     if (!captcha) return setError('Confirme que você não é um robô.');
 
     setLoading(true);
+    const profData = { role, credential: credential.trim() };
+    try {
+      localStorage.setItem(`prof_${email.trim().toLowerCase()}`, JSON.stringify(profData));
+    } catch {
+      // ignore
+    }
     const res = await signUp({
       name,
       sex: 'outro',
@@ -66,7 +72,7 @@ export default function ProfessionalRegister() {
       startWeightKg: null,
       heightCm: null,
       password,
-      professional: { role, credential: credential.trim() },
+      professional: profData,
     });
     setLoading(false);
     if (res.ok) {
