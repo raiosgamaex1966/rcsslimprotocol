@@ -55,9 +55,9 @@ export default function MedicalReport() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 sm:p-8 dark:bg-slate-950 print:bg-white print:p-0">
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-8 dark:bg-slate-950 print:bg-white print:p-0">
       {/* Botões de Ação no Topo (ocultos na impressão) */}
-      <div className="mx-auto max-w-3xl mb-6 flex items-center justify-between print:hidden">
+      <div className="mx-auto max-w-3xl mb-4 sm:mb-6 flex items-center justify-between gap-2 print:hidden">
         <button
           onClick={() => navigate('/app')}
           className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
@@ -65,46 +65,50 @@ export default function MedicalReport() {
           <ArrowLeft className="h-4 w-4" /> Voltar ao Painel
         </button>
 
-        <Button onClick={handlePrint} className="!px-4 !py-2 text-xs">
+        <Button onClick={handlePrint} className="!px-3 !py-1.5 sm:!px-4 sm:!py-2 text-xs">
           <Printer className="h-4 w-4" /> Imprimir / Salvar PDF
         </Button>
       </div>
 
       {/* Folha do Relatório */}
-      <div className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900 print:max-w-none print:border-none print:p-0 print:shadow-none">
+      <div className="mx-auto max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900 print:max-w-none print:border-none print:p-0 print:shadow-none">
         {/* Cabeçalho */}
-        <div className="flex items-start justify-between border-b border-slate-200 pb-6 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-200 pb-5 dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2">
-              <span className="grid h-8 w-8 place-items-center rounded-xl bg-brand-500 text-white">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-brand-500 text-white">
                 💉
               </span>
-              <h1 className="text-xl font-extrabold text-slate-900 dark:text-white">
+              <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white leading-tight">
                 MinhaCaneta — Relatório para Consulta Clínica
               </h1>
             </div>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-[11px] sm:text-xs text-slate-500">
               Resumo gerado em {new Date().toLocaleDateString('pt-BR')} às{' '}
               {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
             </p>
           </div>
 
-          <div className="text-right">
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+          <div className="self-start sm:self-auto shrink-0">
+            <span className="inline-block rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
               Acompanhamento GLP-1/GIP
             </span>
           </div>
         </div>
 
         {/* Dados do Paciente */}
-        <div className="mt-6 grid grid-cols-2 gap-4 rounded-2xl bg-slate-50 p-4 text-xs text-slate-700 dark:bg-slate-800/40 dark:text-slate-300 sm:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 rounded-2xl bg-slate-50 p-4 text-xs text-slate-700 dark:bg-slate-800/40 dark:text-slate-300 sm:grid-cols-4">
           <div>
             <p className="font-bold text-slate-400">Paciente</p>
-            <p className="font-extrabold text-slate-900 dark:text-white">{profile?.name ?? '—'}</p>
+            <p className="font-extrabold text-slate-900 dark:text-white truncate">{profile?.name ?? '—'}</p>
           </div>
           <div>
             <p className="font-bold text-slate-400">Nascimento</p>
-            <p>{profile?.birthDate ? fmtDateMedium(new Date(profile.birthDate)) : '—'}</p>
+            <p>
+              {profile?.birthDate
+                ? new Date(profile.birthDate + 'T12:00:00').toLocaleDateString('pt-BR')
+                : '—'}
+            </p>
           </div>
           <div>
             <p className="font-bold text-slate-400">Altura</p>
@@ -112,12 +116,12 @@ export default function MedicalReport() {
           </div>
           <div>
             <p className="font-bold text-slate-400">Adesão ao Tratamento</p>
-            <p className="font-extrabold text-emerald-600">{Math.round(adherence * 100)}%</p>
+            <p className="font-extrabold text-emerald-600">{Math.min(100, Math.round(adherence))}%</p>
           </div>
         </div>
 
         {/* Resumo do Tratamento & Peso */}
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-5 grid gap-3 sm:gap-4 sm:grid-cols-2">
           {/* Tratamento */}
           <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -133,7 +137,7 @@ export default function MedicalReport() {
               Dose semanal atual: <strong>{treatment ? fmtMg(treatment.doseMg) : '—'}</strong>
             </p>
             <p className="text-xs text-slate-500">
-              Início: {treatment?.startDate ? fmtDateMedium(new Date(treatment.startDate)) : '—'}
+              Início: {treatment?.startDate ? new Date(treatment.startDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
             </p>
           </div>
 
@@ -158,7 +162,7 @@ export default function MedicalReport() {
             </div>
             <p className="mt-1 text-xs text-slate-500">
               Inicial: {startWeight ?? '—'} kg · IMC Atual:{' '}
-              <strong>{currentImc ? `${currentImc.val} (${currentImc.cat})` : '—'}</strong>
+              <strong>{currentImc ? `${currentImc.imc} (${currentImc.label})` : '—'}</strong>
             </p>
           </div>
         </div>
