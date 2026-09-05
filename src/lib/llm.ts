@@ -245,13 +245,40 @@ export interface LLMConfig {
   enabled: boolean;
 }
 
-export const LLM_DEFAULTS: Record<LLMProvider, { model: string; hint: string; baseUrl?: string }> = {
-  openai: { model: 'gpt-4o-mini', hint: 'ex.: gpt-4o-mini' },
-  anthropic: { model: 'claude-sonnet-4-5', hint: 'ex.: claude-sonnet-4-5' },
-  gemini: { model: 'gemini-2.5-flash', hint: 'ex.: gemini-2.5-flash' },
-  openrouter: { model: 'openai/gpt-4o-mini', hint: 'ex.: openai/gpt-4o-mini ou meta-llama/llama-3.3-70b-instruct', baseUrl: 'https://openrouter.ai/api/v1' },
-  deepinfra: { model: 'meta-llama/Meta-Llama-3.1-70B-Instruct', hint: 'ex.: meta-llama/Meta-Llama-3.1-70B-Instruct', baseUrl: 'https://api.deepinfra.com/v1/openai' },
-  groq: { model: 'llama-3.3-70b-versatile', hint: 'ex.: llama-3.3-70b-versatile', baseUrl: 'https://api.groq.com/openai/v1' },
+export const LLM_DEFAULTS: Record<LLMProvider, { model: string; hint: string; baseUrl?: string; suggestedModels?: string[] }> = {
+  openai: { 
+    model: 'gpt-4o-mini', 
+    hint: 'Modelos: gpt-4o-mini, gpt-4o',
+    suggestedModels: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'],
+  },
+  anthropic: { 
+    model: 'claude-sonnet-4-5', 
+    hint: 'Modelos: claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022',
+    suggestedModels: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+  },
+  gemini: { 
+    model: 'gemini-1.5-flash', 
+    hint: 'Modelos: gemini-1.5-flash, gemini-1.5-pro, gemini-2.0-flash',
+    suggestedModels: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'],
+  },
+  openrouter: { 
+    model: 'openai/gpt-4o-mini', 
+    hint: 'Modelos: openai/gpt-4o-mini, meta-llama/llama-3.3-70b-instruct', 
+    baseUrl: 'https://openrouter.ai/api/v1',
+    suggestedModels: ['openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'google/gemini-flash-1.5'],
+  },
+  deepinfra: { 
+    model: 'meta-llama/Meta-Llama-3.1-70B-Instruct', 
+    hint: 'Modelos: meta-llama/Meta-Llama-3.1-70B-Instruct, meta-llama/Meta-Llama-3-8B-Instruct', 
+    baseUrl: 'https://api.deepinfra.com/v1/openai',
+    suggestedModels: ['meta-llama/Meta-Llama-3.1-70B-Instruct', 'meta-llama/Meta-Llama-3-8B-Instruct'],
+  },
+  groq: { 
+    model: 'llama-3.1-8b-instant', 
+    hint: 'Modelos: llama-3.1-8b-instant, llama-3.3-70b-versatile, mixtral-8x7b-32768, gemma2-9b-it', 
+    baseUrl: 'https://api.groq.com/openai/v1',
+    suggestedModels: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768', 'gemma2-9b-it'],
+  },
   custom: { model: '', hint: 'URL compatível OpenAI' },
 };
 
@@ -362,7 +389,8 @@ export async function requestLLM(cfg: LLMConfig, prompt: string, maxTokens: numb
   }
 
   // gemini
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+  const cleanGeminiModel = model.replace(/^models\//, '');
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanGeminiModel}:generateContent?key=${key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.6, maxOutputTokens: maxTokens } }),

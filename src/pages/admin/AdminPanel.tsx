@@ -237,9 +237,41 @@ function AdminTools() {
                 <option value="custom">Custom (OpenAI-compatível)</option>
               </SelectInput>
             </Field>
-            <Field label="Modelo" required hint={LLM_DEFAULTS[cfg.provider]?.hint}>
-              <TextInput placeholder={LLM_DEFAULTS[cfg.provider]?.model || 'ex.: gpt-4o-mini'} value={cfg.model} onChange={(e) => patch({ model: e.target.value })} />
-            </Field>
+            <div>
+              <Field label="Modelo" required>
+                <TextInput
+                  list="suggested-models"
+                  placeholder={LLM_DEFAULTS[cfg.provider]?.model || 'ex.: gpt-4o-mini'}
+                  value={cfg.model}
+                  onChange={(e) => patch({ model: e.target.value.trim() })}
+                />
+                <datalist id="suggested-models">
+                  {(LLM_DEFAULTS[cfg.provider]?.suggestedModels ?? []).map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </Field>
+              {LLM_DEFAULTS[cfg.provider]?.suggestedModels && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                  <span className="text-[10px] text-slate-400 font-medium">Sugestões:</span>
+                  {LLM_DEFAULTS[cfg.provider].suggestedModels!.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => patch({ model: m })}
+                      className={cn(
+                        'rounded-md px-1.5 py-0.5 text-[10px] font-semibold transition',
+                        cfg.model === m
+                          ? 'bg-brand-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700',
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="mt-4">
