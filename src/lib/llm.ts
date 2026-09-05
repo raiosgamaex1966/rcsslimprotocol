@@ -233,7 +233,7 @@ export function buildFallbackWeekMenu(targets: NutritionTargets): WeekMenu {
  * LLM — configuração do super admin + geração dos cardápios
  * ============================================================ */
 
-export type LLMProvider = 'openai' | 'anthropic' | 'gemini' | 'custom';
+export type LLMProvider = 'openai' | 'anthropic' | 'gemini' | 'openrouter' | 'deepinfra' | 'groq' | 'custom';
 
 export interface LLMConfig {
   provider: LLMProvider;
@@ -245,11 +245,14 @@ export interface LLMConfig {
   enabled: boolean;
 }
 
-export const LLM_DEFAULTS: Record<LLMProvider, { model: string; hint: string }> = {
-  openai: { model: 'gpt-4o-mini', hint: 'https://api.openai.com/v1/chat/completions' },
-  anthropic: { model: 'claude-sonnet-4-5', hint: 'https://api.anthropic.com/v1/messages' },
-  gemini: { model: 'gemini-2.5-flash', hint: 'https://generativelanguage.googleapis.com' },
-  custom: { model: '', hint: 'URL base compatível com OpenAI (ex.: https://.../v1)' },
+export const LLM_DEFAULTS: Record<LLMProvider, { model: string; hint: string; baseUrl?: string }> = {
+  openai: { model: 'gpt-4o-mini', hint: 'ex.: gpt-4o-mini' },
+  anthropic: { model: 'claude-sonnet-4-5', hint: 'ex.: claude-sonnet-4-5' },
+  gemini: { model: 'gemini-2.5-flash', hint: 'ex.: gemini-2.5-flash' },
+  openrouter: { model: 'openai/gpt-4o-mini', hint: 'ex.: openai/gpt-4o-mini ou meta-llama/llama-3.3-70b-instruct', baseUrl: 'https://openrouter.ai/api/v1' },
+  deepinfra: { model: 'meta-llama/Meta-Llama-3.1-70B-Instruct', hint: 'ex.: meta-llama/Meta-Llama-3.1-70B-Instruct', baseUrl: 'https://api.deepinfra.com/v1/openai' },
+  groq: { model: 'llama-3.3-70b-versatile', hint: 'ex.: llama-3.3-70b-versatile', baseUrl: 'https://api.groq.com/openai/v1' },
+  custom: { model: '', hint: 'URL compatível OpenAI' },
 };
 
 const CONFIG_KEY = 'minhacaneta_llm_config';
@@ -309,12 +312,38 @@ export async function requestLLM(cfg: LLMConfig, prompt: string, maxTokens: numb
   const model = cfg.model.trim();
   if (!model) throw new Error('Modelo não configurado.');
 
-  if (cfg.provider === 'openai' || cfg.provider === 'custom') {
-    const base = cfg.provider === 'custom' ? (cfg.baseUrl ?? '').replace(/\/+$/, '') : 'https://api.openai.com/v1';
+  // Provedores compatíveis com a API OpenAI (OpenAI, OpenRouter, DeepInfra, Groq, Custom)
+  if (
+    cfg.provider === 'openai' ||
+    cfg.provider === 'openrouter' ||
+    cfg.provider === 'deepinfra' ||
+    cfg.provider === 'groq' ||
+    cfg.provider === 'custom'
+  ) {
+    let base = 'https://api.openai.com/v1';
+    if (cfg.provider === 'openrouter') {
+      base = 'https://openrouter.ai/api/v1';
+    } else if (cfg.provider === 'deepinfra') {
+      base = 'https://api.deepinfra.com/v1/openai';
+    } else if (cfg.provider === 'groq') {
+      base = 'https://api.groq.com/openai/v1';
+    } else if (cfg.provider === 'custom') {
+      base = (cfg.baseUrl ?? '').replace(/\/+$/, '');
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${key}`,
+    };
+    if (cfg.provider === 'openrouter') {
+      headers['HTTP-Referer'] = window.location.origin;
+      headers['X-Title'] = 'MinhaCaneta Protocol';
+    }
+
     const res = await fetch(`${base}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.7, max_tokens: maxTokens }),
+      headers,
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.6, max_tokens: maxTokens }),
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error?.message ?? `Erro HTTP ${res.status}`);
@@ -336,24 +365,94 @@ export async function requestLLM(cfg: LLMConfig, prompt: string, maxTokens: numb
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, maxOutputTokens: maxTokens } }),
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.6, maxOutputTokens: maxTokens } }),
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error?.message ?? `Erro HTTP ${res.status}`);
   return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
-/* ---------- parse/validação do JSON da LLM ---------- */
+/* ---------- parse/validação do JSON da LLM com reparo resiliente ---------- */
+
+function repairTruncatedJSON(raw: string): string {
+  let cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const start = cleaned.indexOf('{');
+  if (start === -1) return raw;
+  cleaned = cleaned.slice(start);
+
+  // Tentativa de parse direto
+  try {
+    JSON.parse(cleaned);
+    return cleaned;
+  } catch {
+    // Se foi cortado por limite de tokens, removemos vírgula pendente ou chaves abertas
+  }
+
+  // Tenta fechar colchetes e chaves pendentes
+  let candidate = cleaned;
+  // Remove trailing dangling string ou comma
+  candidate = candidate.replace(/,\s*$/, '').trim();
+
+  // Fecha aspas se ímpar
+  const quoteMatches = candidate.match(/"/g);
+  if (quoteMatches && quoteMatches.length % 2 !== 0) {
+    candidate += '"';
+  }
+
+  // Balanceia colchetes e chaves
+  let openBrackets = (candidate.match(/\[/g) || []).length - (candidate.match(/\]/g) || []).length;
+  let openBraces = (candidate.match(/\{/g) || []).length - (candidate.match(/\}/g) || []).length;
+
+  // Se openBrackets > 0 fecha
+  while (openBrackets > 0) {
+    candidate += ']';
+    openBrackets--;
+  }
+  // Se openBraces > 0 fecha
+  while (openBraces > 0) {
+    candidate += '}';
+    openBraces--;
+  }
+
+  try {
+    JSON.parse(candidate);
+    return candidate;
+  } catch {
+    // Se ainda falhar, tenta achar a última refeição ou dia completo
+    const lastValidRefeicao = cleaned.lastIndexOf('}]');
+    if (lastValidRefeicao > 0) {
+      let sub = cleaned.slice(0, lastValidRefeicao + 2);
+      let b = (sub.match(/\[/g) || []).length - (sub.match(/\]/g) || []).length;
+      let c = (sub.match(/\{/g) || []).length - (sub.match(/\}/g) || []).length;
+      while (b > 0) { sub += ']'; b--; }
+      while (c > 0) { sub += '}'; c--; }
+      try {
+        JSON.parse(sub);
+        return sub;
+      } catch {}
+    }
+  }
+
+  return cleaned;
+}
 
 function parseAIMenu(text: string, targets: NutritionTargets): DayMenu[] {
-  const cleaned = text.replace(/```json/gi, '```').replace(/```/g, '').trim();
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
+  const sanitized = repairTruncatedJSON(text);
+  const start = sanitized.indexOf('{');
+  const end = sanitized.lastIndexOf('}');
   if (start === -1 || end === -1) throw new Error('A LLM não retornou JSON válido.');
-  const obj = JSON.parse(cleaned.slice(start, end + 1)) as {
+  
+  let obj: {
     dias?: { dia?: number; dia_nome?: string; refeicoes?: { refeicao?: string; horario?: string; itens?: { alimento?: string; quantidade?: string; proteina_g?: number | string; kcal?: number | string }[]; proteina_g?: number | string; kcal?: number | string }[] }[];
   };
-  if (!Array.isArray(obj.dias) || obj.dias.length < 7) throw new Error('A LLM não retornou os 7 dias.');
+
+  try {
+    obj = JSON.parse(sanitized.slice(start, end + 1));
+  } catch (err: any) {
+    throw new Error(`Falha no parse do JSON: ${err?.message || 'formato inválido'}`);
+  }
+
+  if (!Array.isArray(obj.dias) || obj.dias.length === 0) throw new Error('A LLM não retornou o cronograma de dias.');
 
   const mealOrder: MealId[] = ['cafe', 'colacao', 'almoco', 'lanche', 'jantar', 'ceia'];
   const mealNames: Record<string, MealId> = {
@@ -362,8 +461,15 @@ function parseAIMenu(text: string, targets: NutritionTargets): DayMenu[] {
   };
 
   const targetsPerMeal = mealProteinTargets(targets.proteinG);
+  const fallbackWeek = buildFallbackWeekMenu(targets);
 
-  return obj.dias.slice(0, 7).map((d, di) => {
+  // Mapeia até 7 dias, completando com dias do fallback inteligente caso a LLM tenha retornado menos dias
+  return Array.from({ length: 7 }, (_, di) => {
+    const d = obj.dias && obj.dias[di];
+    if (!d || !d.refeicoes || d.refeicoes.length === 0) {
+      return fallbackWeek.days[di];
+    }
+
     let mealIdx = 0;
     const meals: MenuMeal[] = (d.refeicoes ?? []).slice(0, 6).map((r) => {
       const mealId = mealNames[(r.refeicao ?? '').toLowerCase().trim()] ?? mealOrder[mealIdx++] ?? 'cafe';
@@ -378,6 +484,22 @@ function parseAIMenu(text: string, targets: NutritionTargets): DayMenu[] {
       const kcal = Number(r.kcal ?? 0) || items.reduce((s, i) => s + i.kcal, 0);
       return { mealId, name: meta.name, time: r.horario ?? meta.time, items, proteinG, proteinTarget: targetsPerMeal[mealId], kcal };
     });
+
+    // Se faltou alguma refeição, completa com as metas
+    while (meals.length < 6) {
+      const missingId = mealOrder[meals.length];
+      const meta = MEAL_META.find((m) => m.id === missingId)!;
+      meals.push({
+        mealId: missingId,
+        name: meta.name,
+        time: meta.time,
+        items: [{ name: 'Opção protéica leve', portion: '1 porção', proteinG: targetsPerMeal[missingId], kcal: 150 }],
+        proteinG: targetsPerMeal[missingId],
+        proteinTarget: targetsPerMeal[missingId],
+        kcal: 150,
+      });
+    }
+
     return {
       dayIndex: di,
       dayName: d.dia_nome ?? WEEKDAY_NAMES[(di + 1) % 7],
@@ -398,7 +520,8 @@ export async function generateAIMenu(
   logs: DoseLog[],
 ): Promise<DayMenu[]> {
   const prompt = buildUserPrompt(treatment, profile, weightKg, targets, doseMg, logs, cfg.systemPrompt || DEFAULT_SYSTEM_PROMPT);
-  const text = await requestLLM(cfg, prompt, 4000);
+  // 6000 tokens garante capacidade para os 7 dias completos com 6 refeições
+  const text = await requestLLM(cfg, prompt, 6000);
   if (!text.trim()) throw new Error('Resposta vazia da LLM.');
   return parseAIMenu(text, targets);
 }

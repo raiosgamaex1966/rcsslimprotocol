@@ -71,7 +71,7 @@ export default function AdminPanel() {
       <div className="relative mx-auto max-w-5xl px-5">
         <div className="flex items-center justify-between py-5">
           <Logo dark />
-          <Link to="/" className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3.5 py-1.5 text-xs font-bold text-slate-300 hover:bg-white/10">
+          <Link to="/app" className="inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3.5 py-1.5 text-xs font-bold text-slate-300 hover:bg-white/10 transition-colors">
             <ArrowLeft className="h-3.5 w-3.5" /> Voltar ao app
           </Link>
         </div>
@@ -229,13 +229,16 @@ function AdminTools() {
             <Field label="Provedor" required>
               <SelectInput value={cfg.provider} onChange={(e) => handleProvider(e.target.value as LLMProvider)}>
                 <option value="openai">OpenAI (GPT)</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="deepinfra">DeepInfra</option>
+                <option value="groq">Groq</option>
                 <option value="anthropic">Anthropic (Claude)</option>
                 <option value="gemini">Google (Gemini)</option>
                 <option value="custom">Custom (OpenAI-compatível)</option>
               </SelectInput>
             </Field>
-            <Field label="Modelo" required hint={LLM_DEFAULTS[cfg.provider].hint}>
-              <TextInput placeholder={LLM_DEFAULTS[cfg.provider].model || 'ex.: gpt-4o-mini'} value={cfg.model} onChange={(e) => patch({ model: e.target.value })} />
+            <Field label="Modelo" required hint={LLM_DEFAULTS[cfg.provider]?.hint}>
+              <TextInput placeholder={LLM_DEFAULTS[cfg.provider]?.model || 'ex.: gpt-4o-mini'} value={cfg.model} onChange={(e) => patch({ model: e.target.value })} />
             </Field>
           </div>
 

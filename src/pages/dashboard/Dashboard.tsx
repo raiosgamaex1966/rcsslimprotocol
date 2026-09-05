@@ -457,7 +457,7 @@ export default function Dashboard() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:px-5 sm:py-3">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Logo hideSubtitleOnMobile />
-            <nav className="ml-4 hidden items-center gap-1 md:flex">
+            <nav className="ml-2 hidden items-center gap-1 lg:flex xl:ml-4">
               {(
                 [
                   ['inicio', 'Início', <LayoutDashboard key="i" className="h-3.5 w-3.5" />],
@@ -471,7 +471,7 @@ export default function Dashboard() {
                   key={id}
                   onClick={() => setTab(id)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all',
+                    'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold transition-all xl:px-3.5 xl:gap-1.5',
                     tab === id
                       ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25'
                       : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100',
@@ -483,26 +483,26 @@ export default function Dashboard() {
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <Link
               to="/relatorio-consulta"
               title="Gerar relatório impresso / PDF para consulta médica"
               className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:px-3"
             >
-              <span>📄</span> <span className="hidden xs:inline sm:inline">Relatório</span>
+              <span>📄</span> <span className="hidden sm:inline">Relatório</span>
             </Link>
             <ThemeSwitcher />
-            <div className="hidden text-right md:block">
-              <p className="text-xs font-extrabold leading-tight text-slate-800 dark:text-slate-100">{profile?.name ?? user.name}</p>
-              <p className="text-[10px] font-semibold text-slate-400">{user.email}</p>
+            <div className="hidden text-right xl:block max-w-[150px] truncate">
+              <p className="text-xs font-extrabold leading-tight text-slate-800 dark:text-slate-100 truncate">{profile?.name ?? user.name}</p>
+              <p className="text-[10px] font-semibold text-slate-400 truncate">{user.email}</p>
             </div>
             {isAdmin && (
               <Link
                 to="/admin"
                 title="Painel do Super Admin — configurar a LLM de nutrição"
-                className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-[10px] font-extrabold text-brand-700 transition-colors hover:bg-brand-100"
+                className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-[10px] font-extrabold text-brand-700 transition-colors hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-300"
               >
-                <ShieldCheck className="h-3.5 w-3.5" /> Super Admin
+                <ShieldCheck className="h-3.5 w-3.5" /> <span className="hidden lg:inline">Super Admin</span>
               </Link>
             )}
             {(user.professional || data?.profile.professional) && (
