@@ -571,7 +571,7 @@ export default function NutritionTab({ userId, data, update }: Props) {
         {/* Refeições do dia selecionado */}
         <div className="mt-4 grid gap-3 lg:grid-cols-2">
           {days[dayIdx]?.meals.map((meal) => {
-            const eaten = consumedToday.includes(meal.mealId);
+            const eaten = consumedStandardMealIds.includes(meal.mealId);
             return (
               <div
                 key={meal.mealId}
