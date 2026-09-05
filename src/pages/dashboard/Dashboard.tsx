@@ -453,72 +453,114 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-50 pb-24 dark:bg-slate-950 lg:pb-8">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-lg dark:border-slate-800 dark:bg-slate-900/85">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:px-5 sm:py-3">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-2.5 sm:px-6 sm:py-3">
+          {/* Lado Esquerdo: Logo */}
+          <div className="shrink-0">
             <Logo hideSubtitleOnMobile />
-            <nav className="ml-2 hidden items-center gap-1 lg:flex xl:ml-4">
-              {(
-                [
-                  ['inicio', 'Início', <LayoutDashboard key="i" className="h-3.5 w-3.5" />],
-                  ['nutricao', 'Nutrição', <Apple key="n" className="h-3.5 w-3.5" />],
-                  ['exercicios', 'Exercícios', <Dumbbell key="e" className="h-3.5 w-3.5" />],
-                  ['medicamentos', 'Medicamentos', <Pill key="m" className="h-3.5 w-3.5" />],
-                  ['perfil', 'Perfil', <Scale key="p" className="h-3.5 w-3.5" />],
-                ] as [Tab, string, React.ReactNode][]
-              ).map(([id, label, icon]) => (
-                <button
-                  key={id}
-                  onClick={() => setTab(id)}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold transition-all xl:px-3.5 xl:gap-1.5',
-                    tab === id
-                      ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100',
-                  )}
-                >
-                  {icon}
-                  {label}
-                </button>
-              ))}
-            </nav>
           </div>
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+
+          {/* Centro: Navegação de Abas (visível em telas médias/grandes com scroll suave se necessário) */}
+          <nav className="hidden md:flex items-center gap-1 rounded-full bg-slate-100/80 p-1 dark:bg-slate-800/80 shrink-0">
+            {(
+              [
+                ['inicio', 'Início', <LayoutDashboard key="i" className="h-3.5 w-3.5" />],
+                ['nutricao', 'Nutrição', <Apple key="n" className="h-3.5 w-3.5" />],
+                ['exercicios', 'Exercícios', <Dumbbell key="e" className="h-3.5 w-3.5" />],
+                ['medicamentos', 'Medicamentos', <Pill key="m" className="h-3.5 w-3.5" />],
+                ['perfil', 'Perfil', <Scale key="p" className="h-3.5 w-3.5" />],
+              ] as [Tab, string, React.ReactNode][]
+            ).map(([id, label, icon]) => (
+              <button
+                key={id}
+                onClick={() => setTab(id)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-all',
+                  tab === id
+                    ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-400'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200',
+                )}
+              >
+                {icon}
+                <span>{label}</span>
+              </button>
+            ))}
+          </nav>
+
+          {/* Lado Direito: Ações rápidas e Perfil */}
+          <div className="flex items-center gap-2 shrink-0">
             <Link
               to="/relatorio-consulta"
               title="Gerar relatório impresso / PDF para consulta médica"
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:px-3"
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-slate-700 shadow-xs transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 sm:px-3"
             >
-              <span>📄</span> <span className="hidden sm:inline">Relatório</span>
+              <span>📄</span> <span className="hidden xl:inline">Relatório</span>
             </Link>
+
             <ThemeSwitcher />
-            <div className="hidden text-right xl:block max-w-[150px] truncate">
-              <p className="text-xs font-extrabold leading-tight text-slate-800 dark:text-slate-100 truncate">{profile?.name ?? user.name}</p>
-              <p className="text-[10px] font-semibold text-slate-400 truncate">{user.email}</p>
-            </div>
+
             {isAdmin && (
               <Link
                 to="/admin"
-                title="Painel do Super Admin — configurar a LLM de nutrição"
-                className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-[10px] font-extrabold text-brand-700 transition-colors hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-300"
+                title="Painel do Super Admin — configurar a LLM"
+                className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-[10px] font-extrabold text-brand-700 transition-colors hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-300"
               >
-                <ShieldCheck className="h-3.5 w-3.5" /> <span className="hidden lg:inline">Super Admin</span>
+                <ShieldCheck className="h-3.5 w-3.5" /> <span className="hidden xl:inline">Super Admin</span>
               </Link>
             )}
+
             {(user.professional || data?.profile.professional) && (
               <Link
                 to="/profissional"
                 title="Acessar o Portal do Profissional de Saúde"
-                className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2 py-1.5 text-[10px] font-extrabold text-cyan-700 transition-colors hover:bg-cyan-100 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-300 sm:px-3"
+                className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1.5 text-[10px] font-extrabold text-cyan-700 transition-colors hover:bg-cyan-100 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-300"
               >
-                <Dumbbell className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Portal Profissional</span>
+                <Dumbbell className="h-3.5 w-3.5" /> <span className="hidden xl:inline">Portal</span>
               </Link>
             )}
+
+            <div className="hidden 2xl:block text-right max-w-[140px] truncate leading-tight">
+              <p className="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate">{profile?.name ?? user.name}</p>
+              <p className="text-[10px] font-semibold text-slate-400 truncate">{user.email}</p>
+            </div>
+
             <Avatar name={profile?.name ?? user.name} className="h-8 w-8 sm:h-9 sm:w-9 text-[11px] sm:text-xs shrink-0" />
-            <button onClick={handleLogout} className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40" title="Sair">
+
+            <button
+              onClick={handleLogout}
+              className="grid h-8 w-8 sm:h-9 sm:w-9 shrink-0 place-items-center rounded-full text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
+              title="Sair"
+            >
               <LogOut className="h-4 w-4" />
             </button>
           </div>
+        </div>
+
+        {/* Barra de Abas Secundária para Celulares / Telas pequenas (abaixo do topo) */}
+        <div className="flex md:hidden border-t border-slate-100 px-3 py-1.5 overflow-x-auto dark:border-slate-800/80 gap-1 bg-slate-50/50 dark:bg-slate-900/50">
+          {(
+            [
+              ['inicio', 'Início', <LayoutDashboard key="i" className="h-3 w-3" />],
+              ['nutricao', 'Nutrição', <Apple key="n" className="h-3 w-3" />],
+              ['exercicios', 'Exercícios', <Dumbbell key="e" className="h-3 w-3" />],
+              ['medicamentos', 'Medicamentos', <Pill key="m" className="h-3 w-3" />],
+              ['perfil', 'Perfil', <Scale key="p" className="h-3 w-3" />],
+            ] as [Tab, string, React.ReactNode][]
+          ).map(([id, label, icon]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold transition-all shrink-0',
+                tab === id
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'text-slate-500 hover:bg-slate-200/50 dark:text-slate-400',
+              )}
+            >
+              {icon}
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       </header>
 
