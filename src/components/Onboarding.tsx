@@ -6,7 +6,6 @@ import {
   Clock3,
   FileText,
   FlaskConical,
-  Image as ImageIcon,
   ListChecks,
   LoaderCircle,
   Plus,
@@ -71,6 +70,7 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
   const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? 'semanal');
   const [weekday, setWeekday] = useState(initial?.weekday ?? 1);
   const [time, setTime] = useState(initial?.time ?? '08:00');
+  const [startDate, setStartDate] = useState(initial?.startDate ?? new Date().toISOString().slice(0, 10));
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
 

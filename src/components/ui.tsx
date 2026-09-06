@@ -103,9 +103,9 @@ export function SelectInput(props: SelectHTMLAttributes<HTMLSelectElement>) {
 
 /* ---------------- Badges / avisos ---------------- */
 
-export function Badge({ className, children }: { className?: string; children: ReactNode }) {
+export function Badge({ className, title, children }: { className?: string; title?: string; children: ReactNode }) {
   return (
-    <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold', className)}>
+    <span title={title} className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold', className)}>
       {children}
     </span>
   );

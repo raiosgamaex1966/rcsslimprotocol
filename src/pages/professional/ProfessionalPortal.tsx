@@ -23,6 +23,7 @@ import {
   TrendingDown,
   UserPlus,
   Users,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { Avatar, Badge, Button, Card, DisclaimerBox, Field, Logo, SectionTitle, TextInput } from '../../components/ui';
 import ThemeSwitcher from '../../components/ThemeSwitcher';
@@ -673,7 +674,7 @@ function PersonalView({ data, patientId, professionalName, update }: { data: Pat
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ['Idade', data.profile.birthDate ? `${ageFromBirth(data.profile.birthDate)} anos` : 'Não informada'],
-              ['Sexo biológico', data.profile.biologicalSex ? (data.profile.biologicalSex === 'male' ? 'Masculino' : 'Feminino') : 'Não informado'],
+              ['Sexo', data.profile.sex ? (data.profile.sex === 'masculino' ? 'Masculino' : data.profile.sex === 'feminino' ? 'Feminino' : 'Outro') : 'Não informado'],
               ['Nível de atividade', a.activityLevel],
               ['Experiência', a.experience],
               ['Disponibilidade', `${a.daysPerWeek}x/semana · ${a.minutesPerSession} min`],

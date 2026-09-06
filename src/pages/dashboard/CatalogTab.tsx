@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   AlertOctagon,
   Bookmark,
-  BookmarkCheck,
   Building2,
   CalendarClock,
   ChevronDown,
@@ -10,7 +9,6 @@ import {
   FlaskConical,
   Info,
   Search,
-  Star,
   Stethoscope,
 } from 'lucide-react';
 import { Badge, Button, Card, DisclaimerBox, SectionTitle, TextInput } from '../../components/ui';

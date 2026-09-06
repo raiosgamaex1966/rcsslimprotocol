@@ -13,7 +13,7 @@ export default defineConfig({
   base: '/',
   plugins: [react(), tailwindcss(), viteSingleFile()],
   server: {
-    historyApiFallback: true,
+    host: true,
   },
   resolve: {
     alias: {
