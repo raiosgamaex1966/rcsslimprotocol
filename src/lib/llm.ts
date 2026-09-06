@@ -400,6 +400,131 @@ export async function requestLLM(cfg: LLMConfig, prompt: string, maxTokens: numb
   return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
+/** Executa chamada multimodal para envio de imagem (foto de receita médica). */
+export async function requestLLMVision(
+  cfg: LLMConfig,
+  prompt: string,
+  base64Data: string,
+  mimeType: string = 'image/jpeg',
+  maxTokens: number = 2000,
+): Promise<string> {
+  const key = cfg.apiKey.trim();
+  if (!key) throw new Error('Chave da API não configurada.');
+  const model = cfg.model.trim();
+  if (!model) throw new Error('Modelo não configurado.');
+
+  // Se o base64 incluir prefixo data:image/..., limpa para o gemini
+  const pureBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+  const fullDataUri = base64Data.startsWith('data:') ? base64Data : `data:${mimeType};base64,${base64Data}`;
+
+  // Gemini (suporte nativo e robusto para visão / OCR de prescrições)
+  if (cfg.provider === 'gemini') {
+    const cleanGeminiModel = model.replace(/^models\//, '');
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanGeminiModel}:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: mimeType || 'image/jpeg',
+                  data: pureBase64,
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0.2, maxOutputTokens: maxTokens },
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error?.message ?? `Erro Gemini Vision HTTP ${res.status}`);
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  }
+
+  // Anthropic Claude (suporte nativo vision)
+  if (cfg.provider === 'anthropic') {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mimeType || 'image/jpeg',
+                  data: pureBase64,
+                },
+              },
+              { type: 'text', text: prompt },
+            ],
+          },
+        ],
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error?.message ?? `Erro Anthropic HTTP ${res.status}`);
+    return data?.content?.[0]?.text ?? '';
+  }
+
+  // OpenAI / OpenRouter / Custom / Groq / DeepInfra (chat completions com image_url)
+  let base = 'https://api.openai.com/v1';
+  if (cfg.provider === 'openrouter') {
+    base = 'https://openrouter.ai/api/v1';
+  } else if (cfg.provider === 'deepinfra') {
+    base = 'https://api.deepinfra.com/v1/openai';
+  } else if (cfg.provider === 'groq') {
+    base = 'https://api.groq.com/openai/v1';
+  } else if (cfg.provider === 'custom') {
+    base = (cfg.baseUrl ?? '').replace(/\/+$/, '');
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${key}`,
+  };
+  if (cfg.provider === 'openrouter') {
+    headers['HTTP-Referer'] = window.location.origin;
+    headers['X-Title'] = 'MinhaCaneta Protocol';
+  }
+
+  const res = await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: fullDataUri,
+              },
+            },
+          ],
+        },
+      ],
+      temperature: 0.2,
+      max_tokens: maxTokens,
+    }),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error?.message ?? `Erro Vision HTTP ${res.status}`);
+  return data?.choices?.[0]?.message?.content ?? '';
+}
+
 /* ---------- parse/validação do JSON da LLM com reparo resiliente ---------- */
 
 function repairTruncatedJSON(raw: string): string {
@@ -729,6 +854,105 @@ Responda ESTRITAMENTE em formato JSON puro, sem markdown nem explicações adici
     kcal: Math.round(cal),
     analyzedByAI: false,
   };
+}
+
+/* ---------- Análise de Receita Médica por IA (Visão / OCR) ---------- */
+
+export interface AnalyzedPhase {
+  startWeek: number;
+  endWeek: number | null;
+  doseMg: number;
+}
+
+export interface PrescriptionAnalysisResult {
+  success: boolean;
+  medId?: string;
+  brand?: string;
+  doseMg?: number;
+  frequency?: 'semanal' | 'diaria';
+  phases?: AnalyzedPhase[];
+  extractedText: string;
+  doctorInstructions?: string;
+  error?: string;
+}
+
+export async function analyzePrescriptionImage(
+  base64Image: string,
+  mimeType: string,
+  cfg: LLMConfig | null,
+): Promise<PrescriptionAnalysisResult> {
+  if (!cfg?.enabled || !cfg.apiKey) {
+    throw new Error('LLM não está configurada no painel admin para realizar leitura de imagem.');
+  }
+
+  const prompt = `Você é um médico endocrinologista e farmacologista experiente no Brasil, especialista em ler e transcrever receitas médicas de medicamentos para diabetes e obesidade (análogos de GLP-1 / GIP como Ozempic, Wegovy, Mounjaro, Saxenda, Victoza, Rybelsus, Poviztra, Ozivy).
+
+Analise a imagem da receita médica anexada com o máximo de precisão.
+Sua missão:
+1. Transcrever todo o texto legível da receita médica (especialmente posologia, medicamentos, dosagens e instruções do médico).
+2. Identificar qual medicamento GLP-1/GIP foi prescrito e mapear para um dos seguintes IDs de medicamentos válidos no sistema:
+["ozempic", "wegovy", "mounjaro", "saxenda", "victoza", "rybelsus", "ozivy", "poviztra"]
+Se o nome for outro ou similar, mapeie para o ID mais próximo ou compatível.
+3. Identificar a dose inicial prescrita em mg (número decimal, ex.: 0.25, 0.5, 1, 2.5, 5).
+4. Identificar a frequência: "semanal" (geralmente Ozempic, Wegovy, Mounjaro) ou "diaria" (Saxenda, Victoza).
+5. Identificar se há um cronograma ou titulação de doses em semanas prescrito pelo médico. Se houver, liste as fases:
+   - startWeek: número da semana inicial (1, 5, 9 etc.)
+   - endWeek: número da semana final (4, 8 etc.) ou null se for em diante (dose de manutenção)
+   - doseMg: dose dessa fase em mg
+6. Extrair instruções adicionais ou recomendações do médico escritas na receita.
+
+Responda ESTRITAMENTE em formato JSON puro, sem formatações Markdown ou explicações antes ou depois, seguindo este formato exato:
+{
+  "medId": "ozempic",
+  "brand": "Ozempic",
+  "doseMg": 0.25,
+  "frequency": "semanal",
+  "phases": [
+    {"startWeek": 1, "endWeek": 4, "doseMg": 0.25},
+    {"startWeek": 5, "endWeek": 8, "doseMg": 0.5},
+    {"startWeek": 9, "endWeek": null, "doseMg": 1.0}
+  ],
+  "extractedText": "Texto transcrito completo da receita...",
+  "doctorInstructions": "Aplicar 1x por semana às terças-feiras..."
+}`;
+
+  try {
+    const raw = await requestLLMVision(cfg, prompt, base64Image, mimeType, 2000);
+    const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1) {
+      return {
+        success: false,
+        extractedText: raw || 'Não foi possível extrair o texto estruturado da receita.',
+        error: 'A IA não retornou um JSON legível.',
+      };
+    }
+
+    const parsed = JSON.parse(cleaned.slice(start, end + 1));
+    return {
+      success: true,
+      medId: parsed.medId ? String(parsed.medId).toLowerCase() : undefined,
+      brand: parsed.brand ? String(parsed.brand) : undefined,
+      doseMg: parsed.doseMg ? Number(parsed.doseMg) : undefined,
+      frequency: parsed.frequency === 'diaria' ? 'diaria' : 'semanal',
+      phases: Array.isArray(parsed.phases)
+        ? parsed.phases.map((p: any) => ({
+            startWeek: Number(p.startWeek) || 1,
+            endWeek: p.endWeek != null ? Number(p.endWeek) : null,
+            doseMg: Number(p.doseMg) || 0.25,
+          }))
+        : undefined,
+      extractedText: String(parsed.extractedText || ''),
+      doctorInstructions: parsed.doctorInstructions ? String(parsed.doctorInstructions) : undefined,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      extractedText: '',
+      error: err?.message || 'Falha ao processar imagem da receita.',
+    };
+  }
 }
 
 export type { FoodItem };

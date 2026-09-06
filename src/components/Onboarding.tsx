@@ -1,9 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Check, Clock3, FlaskConical, ListChecks, Plus, Save, Search, Sparkles, Syringe, Trash2, TrendingUp } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  CalendarDays,
+  Camera,
+  Check,
+  Clock3,
+  FileText,
+  FlaskConical,
+  Image as ImageIcon,
+  ListChecks,
+  LoaderCircle,
+  Plus,
+  Save,
+  Search,
+  Sparkles,
+  Syringe,
+  Trash2,
+  TrendingUp,
+  Upload,
+  X,
+} from 'lucide-react';
 import { Button, Field, SelectInput, TextInput } from './ui';
 import { ACTIVE_INGREDIENT_LABEL, getTitration, MEDICATIONS, type Medication } from '../data/medications';
 import type { DosePhase, Frequency, Treatment } from '../lib/types';
 import { fmtMg, parseLocalDate, WEEKDAY_NAMES } from '../lib/schedule';
+import { analyzePrescriptionImage, getLLMConfig } from '../lib/llm';
 import { cn } from '../utils/cn';
 
 interface Props {
@@ -51,11 +71,107 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
   const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? 'semanal');
   const [weekday, setWeekday] = useState(initial?.weekday ?? 1);
   const [time, setTime] = useState(initial?.time ?? '08:00');
-  const [startDate, setStartDate] = useState(initial?.startDate ?? new Date().toISOString().slice(0, 10));
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Estados para leitor/foto da receita por IA
+  const [prescriptionImage, setPrescriptionImage] = useState<string | null>(initial?.prescriptionImageUrl ?? null);
+  const [prescriptionMime, setPrescriptionMime] = useState<string>('image/jpeg');
+  const [prescriptionText, setPrescriptionText] = useState<string | null>(initial?.prescriptionText ?? null);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+
   const med: Medication | undefined = useMemo(() => MEDICATIONS.find((m) => m.id === medId), [medId]);
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('Por favor, selecione uma imagem válida (JPEG, PNG, WebP).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setPrescriptionImage(result);
+      setPrescriptionMime(file.type);
+      setOcrMessage(null);
+      setError(null);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleAnalyzePrescription() {
+    if (!prescriptionImage) return;
+
+    const cfg = getLLMConfig();
+    if (!cfg || !cfg.enabled || !cfg.apiKey) {
+      setError('Para ler a imagem com Inteligência Artificial, configure primeiro um provedor de LLM (como Google Gemini ou OpenAI) na área do Super Admin.');
+      return;
+    }
+
+    setOcrBusy(true);
+    setOcrMessage(null);
+    setError(null);
+
+    try {
+      const res = await analyzePrescriptionImage(prescriptionImage, prescriptionMime, cfg);
+      if (res.success) {
+        setPrescriptionText(res.extractedText);
+        setOcrMessage({
+          ok: true,
+          text: `Receita lida com sucesso! ${res.brand ? `Medicamento identificado: ${res.brand}.` : ''} Verifique os campos preenchidos abaixo.`,
+        });
+
+        // Preenche o medicamento automaticamente se correspondente
+        if (res.medId) {
+          const matched = MEDICATIONS.find((m) => m.id === res.medId || m.brand.toLowerCase() === res.medId?.toLowerCase());
+          if (matched) {
+            setMedId(matched.id);
+            setFrequency(matched.frequency);
+          }
+        }
+
+        // Preenche dose ou cronograma
+        if (res.phases && res.phases.length > 0) {
+          setDosageMode('schedule');
+          setRows(
+            res.phases.map((p) => ({
+              key: uid(),
+              startWeek: String(p.startWeek),
+              endWeek: p.endWeek != null ? String(p.endWeek) : '',
+              doseMg: String(p.doseMg).replace('.', ','),
+            })),
+          );
+        } else if (res.doseMg) {
+          setDosageMode('fixed');
+          setDose(res.doseMg);
+        }
+
+        if (res.frequency) {
+          setFrequency(res.frequency);
+        }
+      } else {
+        setOcrMessage({
+          ok: false,
+          text: res.error || 'Não foi possível interpretar a receita automaticamente. Preencha os campos manualmente.',
+        });
+        if (res.extractedText) setPrescriptionText(res.extractedText);
+      }
+    } catch (err: any) {
+      setOcrMessage({
+        ok: false,
+        text: err?.message || 'Erro ao comunicar com a inteligência artificial.',
+      });
+    } finally {
+      setOcrBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (med) {
@@ -137,7 +253,17 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
     if (dosageMode === 'schedule') {
       const phases = validateSchedule();
       if (typeof phases === 'string') return setError(phases);
-      onSubmit({ medId: med.id, doseMg: phases[0].doseMg, frequency, weekday, time, startDate, phases });
+      onSubmit({
+        medId: med.id,
+        doseMg: phases[0].doseMg,
+        frequency,
+        weekday,
+        time,
+        startDate,
+        phases,
+        prescriptionImageUrl: prescriptionImage ?? undefined,
+        prescriptionText: prescriptionText ?? undefined,
+      });
       return;
     }
 
@@ -146,7 +272,16 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
     if (!Number.isFinite(doseMg) || doseMg <= 0) return setError('Informe a dose em miligramas.');
     const maxDose = Math.max(...med.doses);
     if (doseMg > maxDose) return setError(`A dose máxima de ${med.brand} é ${fmtMg(maxDose)}. Confirme com seu médico.`);
-    onSubmit({ medId: med.id, doseMg, frequency, weekday, time, startDate });
+    onSubmit({
+      medId: med.id,
+      doseMg,
+      frequency,
+      weekday,
+      time,
+      startDate,
+      prescriptionImageUrl: prescriptionImage ?? undefined,
+      prescriptionText: prescriptionText ?? undefined,
+    });
   }
 
   /* ---------- prévia do esquema ---------- */
@@ -189,6 +324,145 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
       {error && (
         <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200">{error}</div>
       )}
+
+      {/* Cartão de Leitura de Receita com IA (Foto / Upload) */}
+      <div className="mt-5 overflow-hidden rounded-2xl border border-teal-200/80 bg-white/95 p-4 shadow-sm backdrop-blur-sm dark:border-teal-900/50 dark:bg-slate-800/90 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
+                <Camera className="h-4 w-4" />
+              </span>
+              <p className="text-[13px] font-extrabold text-slate-800 dark:text-slate-100">
+                Ler Receita Médica com Inteligência Artificial
+              </p>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              Tire uma foto ou envie o arquivo da receita. A IA lê a prescrição, transcreve o texto e preenche medicamento e doses automaticamente.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Input para Câmera (mobile) */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+            {/* Input para Arquivo / Galeria */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => cameraInputRef.current?.click()}
+              className="!px-3 !py-1.5 text-xs"
+              title="Abrir a câmera do celular para fotografar a receita"
+            >
+              <Camera className="h-3.5 w-3.5 text-teal-600" />
+              <span>Tirar foto</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => fileInputRef.current?.click()}
+              className="!px-3 !py-1.5 text-xs"
+              title="Escolher imagem ou foto da galeria"
+            >
+              <Upload className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" />
+              <span>Subir arquivo</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Pré-visualização da Imagem e Acionador de IA */}
+        {prescriptionImage && (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 dark:border-slate-700 dark:bg-slate-900/60">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-black/5 dark:border-slate-700">
+                  <img src={prescriptionImage} alt="Receita médica anexada" className="h-full w-full object-cover" />
+                </div>
+                <div>
+                  <p className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                    Foto da receita carregada
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Pronta para reconhecimento por IA
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrescriptionImage(null);
+                      setPrescriptionText(null);
+                      setOcrMessage(null);
+                    }}
+                    className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold text-rose-500 hover:text-rose-700"
+                  >
+                    <X className="h-3 w-3" /> Remover foto
+                  </button>
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                onClick={handleAnalyzePrescription}
+                disabled={ocrBusy}
+                className="!px-4 !py-2 text-xs shadow-md"
+              >
+                {ocrBusy ? (
+                  <>
+                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                    <span>Lendo receita com IA…</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>Transcrever e Preencher com IA</span>
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Mensagem de resultado da leitura */}
+            {ocrMessage && (
+              <div
+                className={cn(
+                  'mt-3 rounded-lg border px-3 py-2 text-xs font-semibold',
+                  ocrMessage.ok
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
+                    : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200',
+                )}
+              >
+                {ocrMessage.text}
+              </div>
+            )}
+
+            {/* Transcrição da Receita Médica */}
+            {prescriptionText && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950">
+                <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-700 dark:text-slate-300">
+                  <FileText className="h-3.5 w-3.5 text-brand-600" />
+                  <span>Transcrição da Receita Médica:</span>
+                </div>
+                <p className="mt-1.5 whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">
+                  {prescriptionText}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Passo 1: medicação */}
       <div className="mt-5">

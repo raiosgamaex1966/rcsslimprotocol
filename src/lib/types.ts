@@ -100,6 +100,8 @@ export interface Treatment {
   time: string; // "08:00"
   startDate: string; // yyyy-mm-dd
   phases?: DosePhase[]; // esquema progressivo opcional (definido pelo médico)
+  prescriptionImageUrl?: string; // foto/arquivo da receita médica
+  prescriptionText?: string; // transcrição gerada pela IA
 }
 
 export type InjectionSite =
@@ -236,6 +238,7 @@ export interface PatientData {
   professionalNotes?: ProfessionalNotes;
   nutritionOverride?: NutritionOverride;
   workoutOverride?: WorkoutPlanLike;
+  savedMedicationIds?: string[]; // IDs de medicamentos salvos para consultas posteriores
 }
 
 /** Representação leve de um plano de treino (evita import circular com lib/exercise). */

@@ -430,6 +430,18 @@ export default function Dashboard() {
     }));
   }
 
+  function handleToggleSaveMed(medId: string) {
+    update((prev) => {
+      const current = prev.savedMedicationIds ?? [];
+      const exists = current.includes(medId);
+      const updated = exists ? current.filter((id) => id !== medId) : [...current, medId];
+      return {
+        ...prev,
+        savedMedicationIds: updated,
+      };
+    });
+  }
+
   function handleLogout() {
     void signOut();
   }
@@ -958,7 +970,10 @@ export default function Dashboard() {
 
             {tab === 'medicamentos' && (
               <div className="mt-6 animate-fade-up">
-                <MedicationsTabBody />
+                <MedicationsTabBody
+                  savedMedicationIds={data?.savedMedicationIds}
+                  onToggleSaveMed={handleToggleSaveMed}
+                />
               </div>
             )}
 
