@@ -293,16 +293,105 @@ export default function Dashboard() {
     return imcInfo(w, profile?.heightCm ?? null);
   }, [data?.weights, profile?.heightCm, profile?.startWeightKg]);
 
-  const status = useMemo(() => (treatment ? doseStatus(treatment, data?.logs ?? []) : null), [treatment, data?.logs]);
-  const next = useMemo(() => (treatment ? nextDoseDate(treatment, data?.logs ?? []) : null), [treatment, data?.logs]);
-  const upcoming = useMemo(() => (treatment ? upcomingDates(treatment, data?.logs ?? [], 4) : []), [treatment, data?.logs]);
-  const progress = useMemo(() => (treatment ? cycleProgress(treatment, data?.logs ?? []) : 0), [treatment, data?.logs]);
-  const adherence = useMemo(() => (treatment ? adherenceRate(treatment, data?.logs ?? []) : 0), [treatment, data?.logs]);
-  const week = treatment ? treatmentWeek(treatment) : 0;
-  const phaseActive = treatment ? activePhase(treatment) : null;
-  const phaseNext = treatment ? nextPhase(treatment) : null;
-  const phases = treatment ? sortedPhases(treatment) : [];
-  const doseNext = treatment && next ? doseAtDate(treatment, next) : 0;
+  const status = useMemo(() => {
+    if (!treatment) return null;
+    try {
+      return doseStatus(treatment, data?.logs ?? []);
+    } catch (e) {
+      console.error('Error calculating doseStatus:', e);
+      return null;
+    }
+  }, [treatment, data?.logs]);
+
+  const next = useMemo(() => {
+    if (!treatment) return null;
+    try {
+      return nextDoseDate(treatment, data?.logs ?? []);
+    } catch (e) {
+      console.error('Error calculating nextDoseDate:', e);
+      return null;
+    }
+  }, [treatment, data?.logs]);
+
+  const upcoming = useMemo(() => {
+    if (!treatment) return [];
+    try {
+      return upcomingDates(treatment, data?.logs ?? [], 4);
+    } catch (e) {
+      console.error('Error calculating upcomingDates:', e);
+      return [];
+    }
+  }, [treatment, data?.logs]);
+
+  const progress = useMemo(() => {
+    if (!treatment) return 0;
+    try {
+      return cycleProgress(treatment, data?.logs ?? []);
+    } catch (e) {
+      console.error('Error calculating cycleProgress:', e);
+      return 0;
+    }
+  }, [treatment, data?.logs]);
+
+  const adherence = useMemo(() => {
+    if (!treatment) return 0;
+    try {
+      return adherenceRate(treatment, data?.logs ?? []);
+    } catch (e) {
+      console.error('Error calculating adherenceRate:', e);
+      return 0;
+    }
+  }, [treatment, data?.logs]);
+
+  const week = useMemo(() => {
+    if (!treatment) return 0;
+    try {
+      return treatmentWeek(treatment);
+    } catch (e) {
+      console.error('Error calculating treatmentWeek:', e);
+      return 1;
+    }
+  }, [treatment]);
+
+  const phaseActive = useMemo(() => {
+    if (!treatment) return null;
+    try {
+      return activePhase(treatment);
+    } catch (e) {
+      console.error('Error calculating activePhase:', e);
+      return null;
+    }
+  }, [treatment]);
+
+  const phaseNext = useMemo(() => {
+    if (!treatment) return null;
+    try {
+      return nextPhase(treatment);
+    } catch (e) {
+      console.error('Error calculating nextPhase:', e);
+      return null;
+    }
+  }, [treatment]);
+
+  const phases = useMemo(() => {
+    if (!treatment) return [];
+    try {
+      return sortedPhases(treatment);
+    } catch (e) {
+      console.error('Error calculating sortedPhases:', e);
+      return [];
+    }
+  }, [treatment]);
+
+  const doseNext = useMemo(() => {
+    if (!treatment || !next) return treatment?.doseMg ?? 0;
+    try {
+      return doseAtDate(treatment, next);
+    } catch (e) {
+      console.error('Error calculating doseAtDate:', e);
+      return treatment?.doseMg ?? 0;
+    }
+  }, [treatment, next]);
 
   const appliedLogs = data?.logs ?? [];
   const lastWeight = data?.weights.length ? data.weights[data.weights.length - 1].kg : null;
@@ -644,12 +733,12 @@ export default function Dashboard() {
                             <Syringe className="h-5.5 w-5.5" />
                           </span>
                           <div>
-                            <p className="text-xl font-extrabold tracking-tight">{med?.brand}</p>
+                            <p className="text-xl font-extrabold tracking-tight">{med?.brand ?? 'Medicação'}</p>
                             <p className="text-xs font-semibold text-slate-400">
                               {phaseActive ? `Dose atual: ${fmtMg(phaseActive.doseMg)}` : `Dose fixa: ${fmtMg(treatment.doseMg)}`}
                               {' · '}
                               {treatment.frequency === 'semanal' ? '1x por semana' : '1x por dia'}
-                              {treatment.frequency === 'semanal' && ` · ${WEEKDAY_NAMES[treatment.weekday].charAt(0).toUpperCase() + WEEKDAY_NAMES[treatment.weekday].slice(1)}s`} às {treatment.time}
+                              {treatment.frequency === 'semanal' && WEEKDAY_NAMES[treatment.weekday] && ` · ${WEEKDAY_NAMES[treatment.weekday].charAt(0).toUpperCase() + WEEKDAY_NAMES[treatment.weekday].slice(1)}s`} às {treatment.time}
                             </p>
                           </div>
                         </div>

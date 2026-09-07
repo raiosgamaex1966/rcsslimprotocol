@@ -1,5 +1,5 @@
 /* MinhaCaneta — Service Worker (offline-first com network-first para documento) */
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.0.1';
 const CACHE = `minhacaneta-${VERSION}`;
 const CORE = ['./', './index.html', './manifest.webmanifest', './icons/icon-512.png'];
 

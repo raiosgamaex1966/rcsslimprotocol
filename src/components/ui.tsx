@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import React, { Component, type ButtonHTMLAttributes, type ErrorInfo, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { cn } from '../utils/cn';
 import { AlertTriangle, ShieldCheck, Syringe } from 'lucide-react';
 import { DISCLAIMER } from '../data/medications';
@@ -168,3 +168,72 @@ export function Avatar({ name, className }: { name: string; className?: string }
     </div>
   );
 }
+
+/* ---------------- ErrorBoundary ---------------- */
+
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+  };
+
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('ErrorBoundary captured error:', error, errorInfo);
+  }
+
+  private handleReset = () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {
+      // ignore
+    }
+    window.location.href = '/app';
+  };
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 p-6 text-slate-800 dark:bg-slate-950 dark:text-slate-100">
+          <div className="w-full max-w-md rounded-3xl border border-rose-200 bg-white p-6 shadow-xl dark:border-rose-900/50 dark:bg-slate-900 sm:p-8 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400">
+              <AlertTriangle className="h-7 w-7" />
+            </div>
+            <h1 className="mt-4 text-xl font-extrabold">Ocorreu um erro ao carregar</h1>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              Ocorreu uma falha inesperada durante a exibição desta tela. Clique no botão abaixo para recarregar ou restaurar o aplicativo.
+            </p>
+            {this.state.error && (
+              <div className="mt-4 overflow-x-auto rounded-xl bg-rose-50 p-3 text-left font-mono text-[11px] text-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+                {this.state.error.message}
+              </div>
+            )}
+            <div className="mt-6 flex flex-col gap-2">
+              <Button full onClick={() => window.location.reload()}>
+                Recarregar página
+              </Button>
+              <Button full variant="secondary" onClick={this.handleReset}>
+                Limpar dados locais e reiniciar
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
