@@ -222,111 +222,39 @@ function AdminTools() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Configuração */}
+        
         <Card className="p-6">
-          <SectionTitle icon={<Bot className="h-4 w-4 text-brand-600" />} title="Conectar provedor" subtitle="chave, modelo e endpoint" />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Provedor" required>
-              <SelectInput value={cfg.provider} onChange={(e) => handleProvider(e.target.value as LLMProvider)}>
-                <option value="openai">OpenAI (GPT)</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="deepinfra">DeepInfra</option>
-                <option value="groq">Groq</option>
-                <option value="anthropic">Anthropic (Claude)</option>
-                <option value="gemini">Google (Gemini)</option>
-                <option value="custom">Custom (OpenAI-compatível)</option>
-              </SelectInput>
-            </Field>
-            <div>
-              <Field label="Modelo" required>
-                <TextInput
-                  list="suggested-models"
-                  placeholder={LLM_DEFAULTS[cfg.provider]?.model || 'ex.: gpt-4o-mini'}
-                  value={cfg.model}
-                  onChange={(e) => patch({ model: e.target.value.trim() })}
-                />
-                <datalist id="suggested-models">
-                  {(LLM_DEFAULTS[cfg.provider]?.suggestedModels ?? []).map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-              </Field>
-              {LLM_DEFAULTS[cfg.provider]?.suggestedModels && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                  <span className="text-[10px] text-slate-400 font-medium">Sugestões:</span>
-                  {LLM_DEFAULTS[cfg.provider].suggestedModels!.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => patch({ model: m })}
-                      className={cn(
-                        'rounded-md px-1.5 py-0.5 text-[10px] font-semibold transition',
-                        cfg.model === m
-                          ? 'bg-brand-600 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700',
-                      )}
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          <SectionTitle icon={<Bot className="h-4 w-4 text-brand-600" />} title="Configuração da IA" subtitle="Segurança Ativada" />
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900/50 dark:bg-emerald-900/20">
+            <h3 className="flex items-center gap-2 text-sm font-bold text-emerald-800 dark:text-emerald-300">
+              <ShieldCheck className="h-4 w-4" /> Inteligência Artificial no Backend
+            </h3>
+            <p className="mt-2 text-xs leading-relaxed text-emerald-700 dark:text-emerald-400">
+              A arquitetura SaaS foi ativada. As chaves da OpenAI/Groq não são mais inseridas no navegador do usuário. 
+              Elas agora são gerenciadas com máxima segurança <b>diretamente nas variáveis de ambiente da Vercel</b>.
+            </p>
+            <ul className="mt-3 list-inside list-disc space-y-1 text-xs font-mono text-emerald-700 dark:text-emerald-400">
+              <li>LLM_PROVIDER (ex: groq)</li>
+              <li>LLM_MODEL (ex: llama-3.1-8b-instant)</li>
+              <li>LLM_API_KEY (gsk_...)</li>
+            </ul>
+            <p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-500">
+              Acesse o painel da Vercel &gt; Settings &gt; Environment Variables para editar.
+            </p>
           </div>
-
-          <div className="mt-4">
-            <Field label="Chave da API" required hint="fica no navegador (protótipo)">
-              <div className="relative">
-                <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <TextInput
-                  type={showKey ? 'text' : 'password'}
-                  placeholder="sk-…"
-                  value={cfg.apiKey}
-                  onChange={(e) => patch({ apiKey: e.target.value })}
-                  className="pl-10 pr-11"
-                />
-                <button type="button" onClick={() => setShowKey((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </Field>
-          </div>
-
-          {cfg.provider === 'custom' && (
-            <div className="mt-4">
-              <Field label="URL base" required hint="ex.: https://meu-servidor.com/v1">
-                <TextInput placeholder="https://…/v1" value={cfg.baseUrl ?? ''} onChange={(e) => patch({ baseUrl: e.target.value })} />
-              </Field>
-            </div>
-          )}
-
-          <label className="mt-4 flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-            <input type="checkbox" checked={cfg.enabled} onChange={(e) => patch({ enabled: e.target.checked })} className="h-4 w-4 accent-brand-600" />
-            <span className="text-xs font-bold text-slate-700 dark:text-slate-200">LLM ativa: pacientes podem gerar cardápios e planos de atividade com IA</span>
-          </label>
-
-          <div className="mt-5 flex flex-wrap items-center gap-2.5">
-            <Button onClick={handleSave}>
-              <Save className="h-4 w-4" /> Salvar configuração
-            </Button>
-            {saved && (
-              <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-emerald-600">
-                <CheckCircle2 className="h-4 w-4" /> Configuração salva!
-              </span>
-            )}
-            <Button variant="secondary" onClick={handleTest} disabled={testBusy || !cfg.apiKey}>
+          <div className="mt-5 flex items-center gap-2.5">
+            <Button variant="secondary" onClick={handleTest} disabled={testBusy}>
               {testBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
-              Testar conexão
+              Testar conexão com a Vercel
             </Button>
           </div>
           {testResult && (
-            <div className={cn('mt-3 rounded-xl border px-4 py-2.5 text-xs font-semibold', testResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200')}>
+            <div className={'mt-3 rounded-xl border px-4 py-2.5 text-xs font-semibold ' + (testResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200')}>
               {testResult.msg}
             </div>
           )}
         </Card>
 
-        {/* Prompt + geração */}
         <div className="space-y-5">
           <Card className="p-6">
             <SectionTitle icon={<FlaskConical className="h-4 w-4 text-brand-600" />} title="Instruções da IA (prompt)" subtitle="variáveis: {contexto} · {metas} · {meta_refeicao}" />
