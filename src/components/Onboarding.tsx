@@ -48,12 +48,20 @@ function uid(): string {
 
 function rowsFromPhases(phases?: DosePhase[] | null): PhaseRow[] {
   if (!phases || phases.length === 0) return [];
-  return phases.map((p) => ({
-    key: uid(),
-    startWeek: String(p.startWeek),
-    endWeek: p.endWeek == null ? '' : String(p.endWeek),
-    doseMg: String(p.doseMg).replace('.', ','),
-  }));
+  const rows: PhaseRow[] = [];
+  for (let i = 0; i < phases.length; i++) {
+    const p = phases[i];
+    const end = p.endWeek != null ? p.endWeek : p.startWeek;
+    for (let w = p.startWeek; w <= end; w++) {
+      rows.push({
+        key: uid(),
+        startWeek: String(w),
+        endWeek: '',
+        doseMg: String(p.doseMg).replace('.', ','),
+      });
+    }
+  }
+  return rows;
 }
 
 function rowsFromTitration(med?: Medication): PhaseRow[] {
@@ -202,7 +210,7 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
   function addRow() {
     setRows((prev) => {
       const last = prev[prev.length - 1];
-      const nextStart = last && last.endWeek.trim() !== '' ? String(Number(last.endWeek) + 1) : last ? String(Number(last.startWeek) + 1) : '1';
+      const nextStart = String(prev.length + 1);
       const nextDose = last?.doseMg ?? med?.defaultDose.toString().replace('.', ',') ?? '';
       return [...prev, { key: uid(), startWeek: nextStart, endWeek: '', doseMg: nextDose }];
     });
@@ -218,27 +226,31 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
     if (rows.length === 0) return 'Adicione ao menos uma fase ao esquema.';
     const phases: DosePhase[] = [];
     const maxDose = med ? Math.max(...med.doses) : Infinity;
+    let currentPhase: DosePhase | null = null;
+
     for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      const start = Number(r.startWeek);
-      const doseMg = parseFloat(r.doseMg.replace(',', '.'));
-      if (!Number.isInteger(start) || start < 1) return `Fase ${i + 1}: informe uma semana de início válida (número inteiro ≥ 1).`;
-      if (!Number.isFinite(doseMg) || doseMg <= 0) return `Fase ${i + 1}: informe a dose em mg (ex.: 0,25).`;
-      if (doseMg > maxDose) return `Fase ${i + 1}: dose acima do máximo de ${med?.brand} (${fmtMg(maxDose)}). Confirme com seu médico.`;
-      if (i === 0 && start !== 1) return 'A primeira fase deve começar na semana 1 (data da primeira aplicação).';
-      const prev = phases[i - 1];
-      if (prev && prev.endWeek == null) return `Fase ${i}: a fase anterior (semana ${prev.startWeek}+) não tem fim definido — ela deve ser a última.`;
-      if (prev && start <= prev.endWeek!) return `Fase ${i + 1}: semanas sobrepostas com a fase anterior (que termina na semana ${prev.endWeek}).`;
-      const endRaw = r.endWeek.trim();
-      if (endRaw === '') {
-        if (i !== rows.length - 1) return `Fase ${i + 1}: informe a semana final (deixe em branco somente na última fase).`;
-        phases.push({ startWeek: start, endWeek: null, doseMg });
+      const weekNum = i + 1;
+      const doseMg = parseFloat(rows[i].doseMg.replace(',', '.'));
+      if (!Number.isFinite(doseMg) || doseMg <= 0) return `Semana ${weekNum}: informe a dose em mg.`;
+      if (doseMg > maxDose) return `Semana ${weekNum}: dose acima do máximo de ${med?.brand} (${fmtMg(maxDose)}). Confirme com seu médico.`;
+
+      if (!currentPhase) {
+        currentPhase = { startWeek: weekNum, endWeek: weekNum, doseMg };
       } else {
-        const end = Number(endRaw);
-        if (!Number.isInteger(end) || end < start) return `Fase ${i + 1}: semana final inválida (deve ser ≥ ${start}).`;
-        phases.push({ startWeek: start, endWeek: end, doseMg });
+        if (currentPhase.doseMg === doseMg) {
+          currentPhase.endWeek = weekNum;
+        } else {
+          phases.push(currentPhase);
+          currentPhase = { startWeek: weekNum, endWeek: weekNum, doseMg };
+        }
       }
     }
+    
+    if (currentPhase) {
+      currentPhase.endWeek = null;
+      phases.push(currentPhase);
+    }
+    
     return phases;
   }
 
@@ -287,15 +299,18 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
   /* ---------- prévia do esquema ---------- */
 
   const preview = useMemo(() => {
-    return rows
-      .map((r, i) => {
-        const s = Number(r.startWeek);
-        const d = parseFloat(r.doseMg.replace(',', '.'));
-        if (!Number.isInteger(s) || s < 1 || !Number.isFinite(d)) return null;
-        const e = r.endWeek.trim() === '' ? (i === rows.length - 1 ? '+' : '?') : Number(r.endWeek);
-        return { key: r.key, label: `Sem ${s}${typeof e === 'number' ? `–${e}` : e}: ${fmtMg(d)}` };
-      })
-      .filter(Boolean) as { key: string; label: string }[];
+    // To show preview, we can just run validateSchedule and format it.
+    // However, validateSchedule can return a string error, so we do it safely:
+    try {
+      const p = validateSchedule();
+      if (typeof p === 'string') return [];
+      return p.map((phase, i) => {
+        const e = phase.endWeek === null ? '+' : phase.endWeek;
+        return { key: String(i), label: `Sem ${phase.startWeek}${typeof e === 'number' && e !== phase.startWeek ? `–${e}` : e === '+' ? '+' : ''}: ${fmtMg(phase.doseMg)}` };
+      });
+    } catch {
+      return [];
+    }
   }, [rows]);
 
   const doseOptions: number[] = med ? med.doses : [];
@@ -603,38 +618,39 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
               <div className="rounded-2xl border border-brand-100 bg-white/80 p-4 dark:border-slate-700 dark:bg-slate-800/80">
                 <p className="flex items-center gap-1.5 text-xs font-extrabold text-slate-700 dark:text-slate-200">
                   <ListChecks className="h-4 w-4 text-brand-600" /> Fases do esquema
-                  <span className="ml-auto hidden text-[10px] font-semibold text-slate-400 sm:block">semana 1 = primeira aplicação</span>
+                  <span className="ml-auto hidden text-[10px] font-semibold text-slate-400 sm:block">cada linha = 1 semana</span>
                 </p>
                 <p className="mt-1 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
-                  Ex.: 1ª–4ª semanas → 0,25 mg · 5ª–8ª semanas → 0,5 mg · 9ª semana em diante → 1,0 mg. Deixe a <b>semana final em branco</b> na última fase.
+                  Apenas informe a dose da semana e a última linha valerá para as semanas seguintes "em diante".
                 </p>
 
-                <div className="mt-3 hidden grid-cols-[92px_92px_1fr_36px] gap-2 px-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:grid">
-                  <span>Semana início</span>
-                  <span>Semana final</span>
-                  <span>Dose (mg)</span>
+                <div className="mt-3 hidden grid-cols-[1fr_120px_36px] gap-2 px-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:grid">
+                  <span>Semana</span>
+                  <span className="text-center">Dose (mg)</span>
                   <span />
                 </div>
 
                 <div className="mt-2 space-y-2">
                   {rows.map((r, i) => (
-                    <div key={r.key} className="grid grid-cols-[1fr_1fr_1.2fr_36px] items-center gap-2 sm:grid-cols-[92px_92px_1fr_36px]">
-                      <TextInput inputMode="numeric" placeholder="1" value={r.startWeek} onChange={(e) => updateRow(r.key, { startWeek: e.target.value })} className="!py-2 text-center text-xs font-bold" />
-                      <TextInput
-                        inputMode="numeric"
-                        placeholder={i === rows.length - 1 ? 'em diante' : `ex.: ${i + 1 === 1 ? 4 : i + 4}`}
-                        value={r.endWeek}
-                        onChange={(e) => updateRow(r.key, { endWeek: e.target.value })}
-                        className="!py-2 text-center text-xs font-bold"
-                        title="Deixe em branco para 'em diante' (última fase)"
+                    <div key={r.key} className="grid grid-cols-[1fr_120px_36px] items-center gap-2">
+                      <div className="flex h-9 items-center px-3 text-[11px] font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                        {i === 0 ? 'Primeira semana' : i === 1 ? 'Segunda semana' : i === 2 ? 'Terceira semana' : i === 3 ? 'Quarta semana' : i === 4 ? 'Quinta semana' : i === 5 ? 'Sexta semana' : `Semana ${i + 1}`}
+                        {i === rows.length - 1 && <span className="ml-1 text-slate-400 font-medium">em diante</span>}
+                      </div>
+                      
+                      <TextInput 
+                        inputMode="decimal" 
+                        placeholder="0,25" 
+                        value={r.doseMg} 
+                        onChange={(e) => updateRow(r.key, { doseMg: e.target.value })} 
+                        className="!py-2 text-center text-xs font-bold" 
                       />
-                      <TextInput inputMode="decimal" placeholder="0,25" value={r.doseMg} onChange={(e) => updateRow(r.key, { doseMg: e.target.value })} className="!py-2 text-center text-xs font-bold" />
                       <button
                         type="button"
                         onClick={() => removeRow(r.key)}
                         disabled={rows.length === 1}
                         className="grid h-9 w-9 place-items-center rounded-lg text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500 disabled:cursor-not-allowed disabled:opacity-30"
-                        title="Remover fase"
+                        title="Remover semana"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>

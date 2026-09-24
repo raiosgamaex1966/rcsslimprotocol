@@ -67,15 +67,16 @@ export default function NutritionTab({ userId, data, update }: Props) {
     analyzedByAI: boolean;
   } | null>(null);
 
+  const weights = data.weights ?? [];
   const weightKg = (() => {
-    if (data.weights.length) return data.weights[data.weights.length - 1].kg;
+    if (weights.length) return weights[weights.length - 1].kg;
     return profile?.startWeightKg ?? null;
   })();
   const doseMg = currentDoseMg(treatment);
   const med = treatment ? findMedication(treatment.medId) : undefined;
   const age = profile?.birthDate ? ageFromBirth(profile.birthDate) : null;
   const activityLevel = data.physicalAssessment?.activityLevel ?? 'leve';
-  const weightTrend = weeklyWeightTrend(data.weights);
+  const weightTrend = weeklyWeightTrend(weights);
   const menuSignature = `${Math.round((weightKg ?? 0) * 10)}-${doseMg}-${activityLevel}-${weightTrend?.percentPerWeek ?? 0}`;
 
   useEffect(() => {

@@ -8,7 +8,7 @@ import { cn } from '../utils/cn';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (site: InjectionSite, notes?: string) => void;
+  onConfirm: (site: InjectionSite, date: string, notes?: string) => void;
   lastSite?: InjectionSite;
   suggestedSite?: InjectionSite;
   doseMg: number;
@@ -36,6 +36,7 @@ export default function InjectionSiteModal({
   const [selected, setSelected] = useState<InjectionSite>(
     suggestedSite || 'abdomen_inferior_direito',
   );
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
 
   if (!isOpen) return null;
@@ -138,17 +139,30 @@ export default function InjectionSiteModal({
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            Observação / Sintoma local (opcional):
-          </label>
-          <input
-            type="text"
-            placeholder="Ex: leve vermelhidão, sem dor, fácil aplicação..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-          />
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Data da Aplicação:
+            </label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Observação (opcional):
+            </label>
+            <input
+              type="text"
+              placeholder="Ex: leve vermelhidão..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            />
+          </div>
         </div>
 
         <div className="mt-6 flex items-center justify-end gap-2.5">
@@ -156,7 +170,7 @@ export default function InjectionSiteModal({
             Cancelar
           </Button>
           <Button
-            onClick={() => onConfirm(selected, notes)}
+            onClick={() => onConfirm(selected, date, notes)}
             className="!py-2.5 !px-5 !text-xs"
           >
             Confirmar e Registrar

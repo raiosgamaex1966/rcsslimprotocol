@@ -955,4 +955,50 @@ Responda ESTRITAMENTE em formato JSON puro, sem formatações Markdown ou explic
   }
 }
 
+export async function generateMedicationGuidance(treatment: Treatment, profile: Profile, guideText: string): Promise<string> {
+  const cfg = getLLMConfig();
+  if (!cfg || !cfg.enabled) {
+    return "Nota: Habilite a Inteligência Artificial nas configurações para gerar recomendações personalizadas.";
+  }
+
+  const med = findMedication(treatment.medId);
+  const brand = med ? med.brand : 'a medicação';
+
+  let dosesStr = `Dose fixa de ${treatment.doseMg} mg`;
+  if (treatment.phases && treatment.phases.length > 0) {
+    dosesStr = 'Esquema de progressão de dose:\n' + treatment.phases.map(p => 
+      `- Semana ${p.startWeek} ${p.endWeek ? `a ${p.endWeek}` : 'em diante'}: ${p.doseMg} mg`
+    ).join('\n');
+  }
+
+  const prompt = `Você é um médico endocrinologista experiente. O paciente acabou de configurar seu tratamento no aplicativo.
+Escreva uma nota clínica orientadora para este paciente. A nota deve ser em tom acolhedor, direto, fácil de entender e focada na prática. 
+Não use formatações de markdown (como **negrito**), apenas texto simples com quebras de linha, travessões (-) ou numeração para as listas. Seja conciso.
+
+Dados do paciente:
+Nome: ${profile.name || 'Paciente'}
+Tratamento: ${brand}
+Esquema de doses:
+${dosesStr}
+
+Use ESTRITAMENTE as informações do seguinte guia para embasar sua resposta (não invente outras recomendações clínicas):
+--- GUIA CLÍNICO ---
+${guideText}
+--- FIM DO GUIA ---
+
+Instruções para a nota:
+1. Comece parabenizando pelo início do tratamento com ${brand}.
+2. Informe rapidamente o que pode acontecer nos próximos dias (foco nos efeitos gastrointestinais e retardo gástrico).
+3. Dê a instrução exata sobre fracionamento de água (doses suportáveis) para evitar constipação e náusea/empazinamento.
+4. Lembre sobre a obrigatoriedade de ingestão de proteínas e exercícios para não perder massa muscular (conforme o guia).
+5. Mostre o resumo das doses configuradas pelo paciente.`;
+
+  try {
+    const raw = await requestLLM(cfg, prompt, 1500);
+    return raw;
+  } catch (err: any) {
+    return `Falha ao gerar nota da IA: ${err?.message}`;
+  }
+}
+
 export type { FoodItem };

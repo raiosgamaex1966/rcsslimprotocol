@@ -37,6 +37,7 @@ import { ACTIVE_INGREDIENT_LABEL, findMedication } from '../../data/medications'
 import { activePhase, adherenceRate, ageFromBirth, cycleProgress, doseAtDate, doseStatus, fmtDateLong, fmtDateMedium, fmtMg, imcInfo, nextDoseDate, nextPhase, relativeDays, sortedPhases, treatmentWeek, upcomingDates, WEEKDAY_NAMES } from '../../lib/schedule';
 import type { InjectionSite, PatientData, PenStock, Treatment } from '../../lib/types';
 import { INJECTION_SITE_LABELS } from '../../lib/types';
+import { generateMedicationGuidance } from '../../lib/llm';
 import { cn } from '../../utils/cn';
 import { MedicationsTabBody } from './CatalogTab';
 
@@ -439,11 +440,16 @@ export default function Dashboard() {
     setSiteModalOpen(true);
   }
 
-  function handleConfirmDoseWithSite(site: InjectionSite, notes?: string) {
+  function handleConfirmDoseWithSite(site: InjectionSite, dateInput: string, notes?: string) {
     if (!treatment) return;
     setSiteModalOpen(false);
 
-    const doseNow = doseAtDate(treatment, new Date());
+    // If the user selected a date, we append the current time to it to make a valid ISO string
+    // Or we just use `dateInput + "T12:00:00.000Z"`
+    const dateToLog = new Date(`${dateInput}T12:00:00`).toISOString();
+    
+    // We can calculate the dose based on that date, or use the current expected dose
+    const doseToLog = doseAtDate(treatment, new Date(dateToLog));
 
     update((prev) => {
       // Se tiver caneta cadastrada, incrementa o uso
@@ -462,13 +468,13 @@ export default function Dashboard() {
           ...prev.logs,
           {
             id: uid(),
-            date: new Date().toISOString(),
-            doseMg: doseNow,
+            date: dateToLog,
+            doseMg: doseToLog,
             medId: treatment.medId,
             site,
             notes: notes?.trim() ? notes.trim() : undefined,
           },
-        ],
+        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
       };
     });
 
@@ -483,10 +489,18 @@ export default function Dashboard() {
   function handleSaveWeight() {
     const kg = parseFloat(weightInput.replace(',', '.'));
     if (!Number.isFinite(kg) || kg < 30 || kg > 400) return;
-    update((prev) => ({
-      ...prev,
-      weights: [...prev.weights, { date: new Date().toISOString(), kg: Math.round(kg * 10) / 10 }],
-    }));
+    
+    update((prev) => {
+      const startW = prev.profile.startWeightKg;
+      if (startW != null && (startW - kg) >= 5) {
+        // Trigger a flag or alert about > 5kg loss and AI recalculation
+        alert(`Parabéns! Você já perdeu ${(startW - kg).toLocaleString('pt-BR')} kg! A inteligência artificial irá recalcular suas metas de água e proteína automaticamente na aba de Nutrição para preservar sua massa magra e saúde.`);
+      }
+      return {
+        ...prev,
+        weights: [...prev.weights, { date: new Date().toISOString(), kg: Math.round(kg * 10) / 10 }],
+      };
+    });
     setWeightInput('');
   }
 
@@ -695,6 +709,27 @@ export default function Dashboard() {
                   onSubmit={(t) => {
                     update((prev) => ({ ...prev, treatment: t }));
                     setEditing(false);
+                    
+                    // Dispara a geração da nota orientadora da IA (assíncrono)
+                    if (data?.profile) {
+                      generateMedicationGuidance(t, data.profile, `
+1. O que é a semaglutida e como ela age no corpo?
+A semaglutida é uma molécula sintética que atua como um agonista dos receptores do hormônio GLP-1. Controle da fome: Aumenta a saciedade. Retardo gástrico: Diminui a velocidade do esvaziamento do estômago.
+3. Quais são os efeitos colaterais mais comuns?
+Náuseas, vômitos, diarreia e constipação (prisão de ventre), azia/refluxo.
+4. Existe risco de perda de massa muscular?
+Sim. Para mitigar, é obrigatório exercícios de resistência (musculação) e ingestão adequada de proteínas.
+Q5: Quais estratégias reduzem o impacto do retardo gástrico?
+Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das grandes refeições e fracionada.`).then(note => {
+                        update((prev) => {
+                          if (!prev.treatment) return prev;
+                          return {
+                            ...prev,
+                            treatment: { ...prev.treatment, aiGuidanceNote: note }
+                          };
+                        });
+                      }).catch(console.error);
+                    }
                   }}
                   onCancel={editing ? () => setEditing(false) : undefined}
                 />
@@ -857,6 +892,18 @@ export default function Dashboard() {
                             </span>
                           ))}
                           <span className="text-[10px] font-semibold text-slate-500">← fase ativa destacada</span>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Nota da IA */}
+                    {treatment.aiGuidanceNote && (
+                      <div className="relative mt-5 border-t border-white/10 pt-4">
+                        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                          <Sparkles className="h-3 w-3 text-brand-400" /> Nota da IA para o paciente
+                        </p>
+                        <div className="mt-3 text-xs leading-relaxed text-slate-300 space-y-2 whitespace-pre-wrap">
+                          {treatment.aiGuidanceNote}
                         </div>
                       </div>
                     )}

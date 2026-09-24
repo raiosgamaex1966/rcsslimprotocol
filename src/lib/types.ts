@@ -102,6 +102,7 @@ export interface Treatment {
   phases?: DosePhase[]; // esquema progressivo opcional (definido pelo médico)
   prescriptionImageUrl?: string; // foto/arquivo da receita médica
   prescriptionText?: string; // transcrição gerada pela IA
+  aiGuidanceNote?: string; // nota explicativa gerada pela IA após o paciente preencher o tratamento
 }
 
 export type InjectionSite =
