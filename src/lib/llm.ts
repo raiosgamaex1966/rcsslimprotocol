@@ -333,49 +333,14 @@ export function buildUserPrompt(treatment: Treatment | null, profile: Profile, w
 
 /* ---------- chamadas aos provedores ---------- */
 
-export async function requestLLM(cfg: LLMConfig, prompt: string, maxTokens: number): Promise<string> {
-  const key = cfg.apiKey.trim();
-  if (!key) throw new Error('Chave da API não configurada.');
-  const model = cfg.model.trim();
-  if (!model) throw new Error('Modelo não configurado.');
-
-  // Provedores compatíveis com a API OpenAI (OpenAI, OpenRouter, DeepInfra, Groq, Custom)
-  if (
-    cfg.provider === 'openai' ||
-    cfg.provider === 'openrouter' ||
-    cfg.provider === 'deepinfra' ||
-    cfg.provider === 'groq' ||
-    cfg.provider === 'custom'
-  ) {
-    let base = 'https://api.openai.com/v1';
-    if (cfg.provider === 'openrouter') {
-      base = 'https://openrouter.ai/api/v1';
-    } else if (cfg.provider === 'deepinfra') {
-      base = 'https://api.deepinfra.com/v1/openai';
-    } else if (cfg.provider === 'groq') {
-      base = 'https://api.groq.com/openai/v1';
-    } else if (cfg.provider === 'custom') {
-      base = (cfg.baseUrl ?? '').replace(/\/+$/, '');
-    }
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${key}`,
-    };
-    if (cfg.provider === 'openrouter') {
-      headers['HTTP-Referer'] = window.location.origin;
-      headers['X-Title'] = 'MinhaCaneta Protocol';
-    }
-
-    const res = await fetch(`${base}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 0.6, max_tokens: maxTokens }),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error?.message ?? `Erro HTTP ${res.status}`);
-    return data?.choices?.[0]?.message?.content ?? '';
-  }
+export async function requestLLM(_cfg: LLMConfig, prompt: string, maxTokens: number = 2000): Promise<string> {
+  const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const url = isLocal ? 'http://localhost:3000/api/llm' : '/api/llm';
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, maxTokens }) });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error ?? `Erro HTTP ${res.status}`);
+  return data?.text ?? '';
+}
 
   if (cfg.provider === 'anthropic') {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -401,128 +366,13 @@ export async function requestLLM(cfg: LLMConfig, prompt: string, maxTokens: numb
 }
 
 /** Executa chamada multimodal para envio de imagem (foto de receita médica). */
-export async function requestLLMVision(
-  cfg: LLMConfig,
-  prompt: string,
-  base64Data: string,
-  mimeType: string = 'image/jpeg',
-  maxTokens: number = 2000,
-): Promise<string> {
-  const key = cfg.apiKey.trim();
-  if (!key) throw new Error('Chave da API não configurada.');
-  const model = cfg.model.trim();
-  if (!model) throw new Error('Modelo não configurado.');
-
-  // Se o base64 incluir prefixo data:image/..., limpa para o gemini
-  const pureBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-  const fullDataUri = base64Data.startsWith('data:') ? base64Data : `data:${mimeType};base64,${base64Data}`;
-
-  // Gemini (suporte nativo e robusto para visão / OCR de prescrições)
-  if (cfg.provider === 'gemini') {
-    const cleanGeminiModel = model.replace(/^models\//, '');
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanGeminiModel}:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              {
-                inlineData: {
-                  mimeType: mimeType || 'image/jpeg',
-                  data: pureBase64,
-                },
-              },
-            ],
-          },
-        ],
-        generationConfig: { temperature: 0.2, maxOutputTokens: maxTokens },
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error?.message ?? `Erro Gemini Vision HTTP ${res.status}`);
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-  }
-
-  // Anthropic Claude (suporte nativo vision)
-  if (cfg.provider === 'anthropic') {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: mimeType || 'image/jpeg',
-                  data: pureBase64,
-                },
-              },
-              { type: 'text', text: prompt },
-            ],
-          },
-        ],
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error?.message ?? `Erro Anthropic HTTP ${res.status}`);
-    return data?.content?.[0]?.text ?? '';
-  }
-
-  // OpenAI / OpenRouter / Custom / Groq / DeepInfra (chat completions com image_url)
-  let base = 'https://api.openai.com/v1';
-  if (cfg.provider === 'openrouter') {
-    base = 'https://openrouter.ai/api/v1';
-  } else if (cfg.provider === 'deepinfra') {
-    base = 'https://api.deepinfra.com/v1/openai';
-  } else if (cfg.provider === 'groq') {
-    base = 'https://api.groq.com/openai/v1';
-  } else if (cfg.provider === 'custom') {
-    base = (cfg.baseUrl ?? '').replace(/\/+$/, '');
-  }
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${key}`,
-  };
-  if (cfg.provider === 'openrouter') {
-    headers['HTTP-Referer'] = window.location.origin;
-    headers['X-Title'] = 'MinhaCaneta Protocol';
-  }
-
-  const res = await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            {
-              type: 'image_url',
-              image_url: {
-                url: fullDataUri,
-              },
-            },
-          ],
-        },
-      ],
-      temperature: 0.2,
-      max_tokens: maxTokens,
-    }),
-  });
+export async function requestLLMVision(_cfg: LLMConfig, prompt: string, base64Data: string, mimeType: string = 'image/jpeg', maxTokens: number = 2000): Promise<string> {
+  const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const url = isLocal ? 'http://localhost:3000/api/vision' : '/api/vision';
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, base64Data, mimeType, maxTokens }) });
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.error?.message ?? `Erro Vision HTTP ${res.status}`);
-  return data?.choices?.[0]?.message?.content ?? '';
+  if (!res.ok) throw new Error(data?.error ?? `Erro HTTP ${res.status}`);
+  return data?.text ?? '';
 }
 
 /* ---------- parse/validação do JSON da LLM com reparo resiliente ---------- */

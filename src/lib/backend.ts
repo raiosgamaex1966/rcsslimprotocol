@@ -331,10 +331,22 @@ export async function savePatientData(userId: string, data: PatientData): Promis
     writeJson(DEMO_DATA_PREFIX + userId, data);
     return;
   }
-  const { error } = await supabase!
-    .from('patient_data')
-    .upsert({ user_id: userId, data, updated_at: new Date().toISOString() });
-  if (error) console.warn('Falha ao salvar dados:', error.message);
+  
+  // Chama a RPC para sincronizar o JSON com as tabelas relacionais do SaaS
+  const { error: rpcError } = await supabase!.rpc('save_patient_data_relational', {
+    p_user_id: userId,
+    p_data: data,
+  });
+
+  // Se a RPC não existir (banco antigo ou não rodou a migração), faz fallback
+  if (rpcError && rpcError.message.includes('Could not find the function')) {
+    const { error } = await supabase!
+      .from('patient_data')
+      .upsert({ user_id: userId, data, updated_at: new Date().toISOString() });
+    if (error) console.warn('Falha ao salvar dados:', error.message);
+  } else if (rpcError) {
+    console.error('Erro na sincronização relacional:', rpcError.message);
+  }
 }
 
 export async function removeAllDemoData(): Promise<void> {
