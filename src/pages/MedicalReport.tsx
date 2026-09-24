@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, FileText, Printer, Stethoscope } from 'lucide-react';
-import { Button, Card, SectionTitle } from '../components/ui';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, Printer } from 'lucide-react';
+import { Button } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { loadPatientData } from '../lib/backend';
 import { findMedication } from '../data/medications';
-import { adherenceRate, fmtDateLong, fmtDateMedium, fmtMg, imcInfo } from '../lib/schedule';
+import { adherenceRate, fmtDateMedium, fmtMg, imcInfo } from '../lib/schedule';
 import type { PatientData } from '../lib/types';
 import { INJECTION_SITE_LABELS } from '../lib/types';
 

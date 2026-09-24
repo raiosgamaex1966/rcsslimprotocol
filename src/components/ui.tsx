@@ -1,4 +1,4 @@
-import React, { Component, type ButtonHTMLAttributes, type ErrorInfo, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { Component, type ButtonHTMLAttributes, type ErrorInfo, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { cn } from '../utils/cn';
 import { AlertTriangle, ShieldCheck, Syringe } from 'lucide-react';
 import { DISCLAIMER } from '../data/medications';

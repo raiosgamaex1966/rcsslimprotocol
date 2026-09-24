@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertCircle, Calendar, CheckCircle2, Clock, PackageCheck, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, PackageCheck, RefreshCw } from 'lucide-react';
 import { Button, Card, SectionTitle } from './ui';
 import type { PenStock } from '../lib/types';
 import { cn } from '../utils/cn';

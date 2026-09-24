@@ -23,13 +23,9 @@ export default function WaterTrackerCard({
   const targetMl = Math.max(2000, Math.round(((currentWeightKg ?? 70) * 35) / 100) * 100);
   const pct = Math.min(100, Math.round((currentMl / targetMl) * 100));
 
-  const [addedAnim, setAddedAnim] = useState<number | null>(null);
-
   function addWater(amount: number) {
     const next = Math.max(0, currentMl + amount);
     onUpdateWater(next);
-    setAddedAnim(amount);
-    setTimeout(() => setAddedAnim(null), 1500);
   }
 
   return (
