@@ -139,12 +139,12 @@ export default function AdminPanel() {
 /* ================= Ferramentas do admin ================= */
 
 const PROVIDERS = [
-  { id: 'openai',     label: 'OpenAI (GPT)',         models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], placeholder: 'sk-...' },
-  { id: 'groq',       label: 'Groq',                 models: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'], placeholder: 'gsk_...' },
-  { id: 'openrouter', label: 'OpenRouter',            models: ['openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'google/gemini-flash-1.5'], placeholder: 'sk-or-...' },
-  { id: 'deepinfra',  label: 'DeepInfra',             models: ['meta-llama/Meta-Llama-3.1-70B-Instruct', 'meta-llama/Meta-Llama-3-8B-Instruct'], placeholder: 'sua chave DeepInfra' },
-  { id: 'gemini',     label: 'Google Gemini',         models: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'], placeholder: 'AIza...' },
-  { id: 'anthropic',  label: 'Anthropic (Claude)',    models: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'], placeholder: 'sk-ant-...' },
+  { id: 'openai',     label: 'OpenAI (GPT)',       models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo', 'o1-mini'],                                                           placeholder: 'sk-...' },
+  { id: 'groq',       label: 'Groq',                models: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'gemma2-9b-it'],                  placeholder: 'gsk_...' },
+  { id: 'openrouter', label: 'OpenRouter',          models: ['openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'google/gemini-flash-1.5', 'mistralai/mixtral-8x7b-instruct'], placeholder: 'sk-or-...' },
+  { id: 'deepinfra',  label: 'DeepInfra',           models: ['meta-llama/Meta-Llama-3.1-70B-Instruct', 'meta-llama/Meta-Llama-3-8B-Instruct', 'mistralai/Mixtral-8x7B-Instruct-v0.1'], placeholder: 'sua chave DeepInfra' },
+  { id: 'gemini',     label: 'Google Gemini',       models: ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash-lite'],                             placeholder: 'AIza...' },
+  { id: 'anthropic',  label: 'Anthropic (Claude)',  models: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],                           placeholder: 'sk-ant-...' },
 ];
 
 function AdminTools() {
