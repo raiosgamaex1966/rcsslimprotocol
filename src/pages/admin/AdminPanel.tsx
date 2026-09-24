@@ -4,9 +4,12 @@ import {
   ArrowLeft,
   Bot,
   Dumbbell,
+  Eye,
+  EyeOff,
   FlaskConical,
   LoaderCircle,
   LogIn,
+  Save,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -21,7 +24,6 @@ import {
   getLLMConfig,
   LLM_DEFAULTS,
   saveLLMConfig,
-  testLLM,
   type LLMConfig,
 } from '../../lib/llm';
 import { computeTargets } from '../../lib/llm';
@@ -136,24 +138,100 @@ export default function AdminPanel() {
 
 /* ================= Ferramentas do admin ================= */
 
+const PROVIDERS = [
+  { id: 'openai',     label: 'OpenAI (GPT)',         models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo'], placeholder: 'sk-...' },
+  { id: 'groq',       label: 'Groq',                 models: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'mixtral-8x7b-32768'], placeholder: 'gsk_...' },
+  { id: 'openrouter', label: 'OpenRouter',            models: ['openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'google/gemini-flash-1.5'], placeholder: 'sk-or-...' },
+  { id: 'deepinfra',  label: 'DeepInfra',             models: ['meta-llama/Meta-Llama-3.1-70B-Instruct', 'meta-llama/Meta-Llama-3-8B-Instruct'], placeholder: 'sua chave DeepInfra' },
+  { id: 'gemini',     label: 'Google Gemini',         models: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'], placeholder: 'AIza...' },
+  { id: 'anthropic',  label: 'Anthropic (Claude)',    models: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'], placeholder: 'sk-ant-...' },
+];
+
 function AdminTools() {
-  const [cfg, setCfg] = useState<LLMConfig>(() => getLLMConfig() ?? { provider: 'openai', apiKey: '', model: LLM_DEFAULTS.openai.model, enabled: true, systemPrompt: DEFAULT_SYSTEM_PROMPT, exercisePrompt: DEFAULT_EXERCISE_PROMPT });
+  const [provider, setProvider] = useState('openai');
+  const [model, setModel] = useState('gpt-4o-mini');
+  const [apiKey, setApiKey] = useState('');
+  const [enabled, setEnabled] = useState(true);
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [loadedHint, setLoadedHint] = useState<string | null>(null);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [genResult, setGenResult] = useState<string | null>(null);
+  const [cfg, setCfg] = useState<LLMConfig>(() => getLLMConfig() ?? { provider: 'openai', apiKey: '', model: LLM_DEFAULTS.openai.model, enabled: true, systemPrompt: DEFAULT_SYSTEM_PROMPT, exercisePrompt: DEFAULT_EXERCISE_PROMPT });
 
   function patch(p: Partial<LLMConfig>) {
     setCfg((c) => ({ ...c, ...p }));
   }
 
+  const currentProvider = PROVIDERS.find(p => p.id === provider) ?? PROVIDERS[0];
+
+  // Carrega configuração salva no backend ao abrir
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.provider) {
+          setProvider(data.provider);
+          setModel(data.model ?? '');
+          setEnabled(data.enabled !== false);
+          setLoadedHint(data.apiKeyHint ?? null);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  function handleProviderChange(p: string) {
+    setProvider(p);
+    const prov = PROVIDERS.find(x => x.id === p);
+    setModel(prov?.models[0] ?? '');
+    setApiKey('');
+    setLoadedHint(null);
+  }
+
+  async function handleSave() {
+    if (!apiKey && !loadedHint) {
+      setSaveResult({ ok: false, msg: 'Informe a chave da API.' });
+      return;
+    }
+    setSaving(true);
+    setSaveResult(null);
+    try {
+      const body: any = { provider, model, enabled };
+      // Só envia a chave se o usuário digitou uma nova
+      if (apiKey) body.apiKey = apiKey;
+      else body.apiKey = '__keep__'; // sinal para o backend manter a chave atual
+      
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar.');
+      setSaveResult({ ok: true, msg: '✅ Configuração salva com sucesso no banco de dados!' });
+      if (apiKey) { setLoadedHint(`...${apiKey.slice(-4)}`); setApiKey(''); }
+    } catch (e) {
+      setSaveResult({ ok: false, msg: e instanceof Error ? e.message : 'Erro desconhecido' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleTest() {
     setTestBusy(true);
     setTestResult(null);
-    saveLLMConfig(cfg);
     try {
-      const answer = await testLLM({ ...cfg, systemPrompt: undefined });
-      setTestResult({ ok: true, msg: `Conexão OK — resposta: "${answer.slice(0, 40)}"` });
+      const res = await fetch('/api/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'Responda apenas: OK', maxTokens: 10 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro');
+      setTestResult({ ok: true, msg: `Conexão OK — resposta: "${(data.text || '').slice(0, 40)}"` });
     } catch (e) {
       setTestResult({ ok: false, msg: e instanceof Error ? e.message : 'Erro desconhecido' });
     } finally {
@@ -191,44 +269,102 @@ function AdminTools() {
         <Badge className="bg-brand-100 text-brand-700">
           <ShieldCheck className="h-3 w-3" /> Super Admin autenticado
         </Badge>
-        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Configuração da LLM: nutrição e exercícios</h1>
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Configuração da IA — SaaS Admin</h1>
         <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">
-          A inteligência artificial elabora o cardápio diário e semanal do paciente com base na <b>dose tomada na semana</b>{' '}
-          (semaglutida, liraglutida ou tirzepatida), peso, altura e metas de proteína para preservar a massa magra. Sem LLM
-          configurada, o app usa cardápios e treinos adaptativos locais.
+          Escolha o provedor e insira a chave. As configurações ficam salvas <b>com segurança no banco de dados</b> (Supabase) e são lidas pelo servidor da Vercel — nenhum paciente tem acesso a isso.
         </p>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
-        {/* Configuração */}
-        
         <Card className="p-6">
-          <SectionTitle icon={<Bot className="h-4 w-4 text-brand-600" />} title="Configuração da IA" subtitle="Segurança Ativada" />
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-900/50 dark:bg-emerald-900/20">
-            <h3 className="flex items-center gap-2 text-sm font-bold text-emerald-800 dark:text-emerald-300">
-              <ShieldCheck className="h-4 w-4" /> Inteligência Artificial no Backend
-            </h3>
-            <p className="mt-2 text-xs leading-relaxed text-emerald-700 dark:text-emerald-400">
-              A arquitetura SaaS foi ativada. As chaves da OpenAI/Groq não são mais inseridas no navegador do usuário. 
-              Elas agora são gerenciadas com máxima segurança <b>diretamente nas variáveis de ambiente da Vercel</b>.
-            </p>
-            <ul className="mt-3 list-inside list-disc space-y-1 text-xs font-mono text-emerald-700 dark:text-emerald-400">
-              <li>LLM_PROVIDER (ex: groq)</li>
-              <li>LLM_MODEL (ex: llama-3.1-8b-instant)</li>
-              <li>LLM_API_KEY (gsk_...)</li>
-            </ul>
-            <p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-500">
-              Acesse o painel da Vercel &gt; Settings &gt; Environment Variables para editar.
-            </p>
+          <SectionTitle icon={<Bot className="h-4 w-4 text-brand-600" />} title="Provedor de IA" subtitle="escolha e configure sua chave" />
+
+          {/* Seletor de provedores */}
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {PROVIDERS.map(p => (
+              <button
+                key={p.id}
+                onClick={() => handleProviderChange(p.id)}
+                className={`rounded-xl border px-3 py-2.5 text-left text-xs font-bold transition ${
+                  provider === p.id
+                    ? 'border-brand-500 bg-brand-50 text-brand-700 dark:border-brand-400 dark:bg-brand-900/30 dark:text-brand-300'
+                    : 'border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-400'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
-          <div className="mt-5 flex items-center gap-2.5">
+
+          {/* Modelo */}
+          <div className="mt-4">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Modelo</label>
+            <div className="mt-1 flex gap-2">
+              <input
+                list={`models-${provider}`}
+                value={model}
+                onChange={e => setModel(e.target.value)}
+                placeholder="Ex: gpt-4o-mini"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <datalist id={`models-${provider}`}>
+                {currentProvider.models.map(m => <option key={m} value={m} />)}
+              </datalist>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {currentProvider.models.map(m => (
+                <button key={m} onClick={() => setModel(m)} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold transition ${model === m ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'}`}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Chave da API */}
+          <div className="mt-4">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Chave da API
+              {loadedHint && <span className="ml-2 font-normal normal-case text-emerald-600">Chave atual: {loadedHint}</span>}
+            </label>
+            <div className="relative mt-1">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder={loadedHint ? 'Deixe em branco para manter a atual' : currentProvider.placeholder}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 pr-10 text-xs text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <button type="button" onClick={() => setShowKey(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* Habilitar IA */}
+          <label className="mt-4 flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+            <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} className="h-4 w-4 accent-brand-600" />
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-200">IA ativa — pacientes podem gerar cardápios e recomendações</span>
+          </label>
+
+          {/* Botões */}
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar no banco
+            </Button>
             <Button variant="secondary" onClick={handleTest} disabled={testBusy}>
               {testBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}
-              Testar conexão com a Vercel
+              Testar conexão
             </Button>
           </div>
+
+          {saveResult && (
+            <div className={`mt-3 rounded-xl border px-4 py-2.5 text-xs font-semibold ${saveResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200'}`}>
+              {saveResult.msg}
+            </div>
+          )}
           {testResult && (
-            <div className={'mt-3 rounded-xl border px-4 py-2.5 text-xs font-semibold ' + (testResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200')}>
+            <div className={`mt-2 rounded-xl border px-4 py-2.5 text-xs font-semibold ${testResult.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200'}`}>
               {testResult.msg}
             </div>
           )}
