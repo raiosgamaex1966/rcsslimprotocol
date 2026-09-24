@@ -3,21 +3,16 @@ import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
   Bot,
-  CheckCircle2,
   Dumbbell,
-  Eye,
-  EyeOff,
   FlaskConical,
-  KeyRound,
   LoaderCircle,
   LogIn,
-  Save,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
   TestTube2,
 } from 'lucide-react';
-import { Badge, Button, Card, Field, Logo, SectionTitle, SelectInput, TextInput } from '../../components/ui';
+import { Badge, Button, Card, Field, Logo, SectionTitle, TextInput } from '../../components/ui';
 import { useAuth } from '../../context/AuthContext';
 import { checkSuperAdmin, DEMO_ADMIN_CREDENTIALS } from '../../lib/backend';
 import {
@@ -28,11 +23,9 @@ import {
   saveLLMConfig,
   testLLM,
   type LLMConfig,
-  type LLMProvider,
 } from '../../lib/llm';
 import { computeTargets } from '../../lib/llm';
 import { DEFAULT_EXERCISE_PROMPT } from '../../lib/exercise';
-import { cn } from '../../utils/cn';
 import VideoManager from '../../components/admin/VideoManager';
 
 export default function AdminPanel() {
@@ -145,8 +138,6 @@ export default function AdminPanel() {
 
 function AdminTools() {
   const [cfg, setCfg] = useState<LLMConfig>(() => getLLMConfig() ?? { provider: 'openai', apiKey: '', model: LLM_DEFAULTS.openai.model, enabled: true, systemPrompt: DEFAULT_SYSTEM_PROMPT, exercisePrompt: DEFAULT_EXERCISE_PROMPT });
-  const [showKey, setShowKey] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [genBusy, setGenBusy] = useState(false);
@@ -154,18 +145,6 @@ function AdminTools() {
 
   function patch(p: Partial<LLMConfig>) {
     setCfg((c) => ({ ...c, ...p }));
-    setSaved(false);
-    setTestResult(null);
-  }
-
-  function handleProvider(p: LLMProvider) {
-    setCfg((c) => ({ ...c, provider: p, model: LLM_DEFAULTS[p].model, baseUrl: p === 'custom' ? c.baseUrl ?? '' : undefined }));
-    setSaved(false);
-  }
-
-  function handleSave() {
-    saveLLMConfig(cfg);
-    setSaved(true);
   }
 
   async function handleTest() {
