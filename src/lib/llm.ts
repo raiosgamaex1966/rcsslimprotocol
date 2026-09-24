@@ -342,29 +342,6 @@ export async function requestLLM(_cfg: LLMConfig, prompt: string, maxTokens: num
   return data?.text ?? '';
 }
 
-  if (cfg.provider === 'anthropic') {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(data?.error?.message ?? `Erro HTTP ${res.status}`);
-    return data?.content?.[0]?.text ?? '';
-  }
-
-  // gemini
-  const cleanGeminiModel = model.replace(/^models\//, '');
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanGeminiModel}:generateContent?key=${key}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.6, maxOutputTokens: maxTokens } }),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.error?.message ?? `Erro HTTP ${res.status}`);
-  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-}
-
 /** Executa chamada multimodal para envio de imagem (foto de receita médica). */
 export async function requestLLMVision(_cfg: LLMConfig, prompt: string, base64Data: string, mimeType: string = 'image/jpeg', maxTokens: number = 2000): Promise<string> {
   const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
