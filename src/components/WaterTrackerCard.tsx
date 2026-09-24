@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Check, Droplets, Plus } from 'lucide-react';
 import { Card, SectionTitle } from './ui';
 import type { WaterLog } from '../lib/types';
