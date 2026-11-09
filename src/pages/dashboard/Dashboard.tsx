@@ -7,11 +7,14 @@ import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
+  History,
   Dumbbell,
   LayoutDashboard,
   LogOut,
   Pencil,
+  PackagePlus,
   Pill,
+  Plus,
   Scale,
   ShieldCheck,
   Sparkles,
@@ -28,14 +31,16 @@ import ExerciseTab from '../../components/ExerciseTab';
 import ThemeSwitcher from '../../components/ThemeSwitcher';
 import SymptomLog from '../../components/SymptomLog';
 import PatientConnections from '../../components/PatientConnections';
-import InjectionSiteModal from '../../components/InjectionSiteModal';
+import InjectionSiteModal, { type ConfirmDosePayload } from '../../components/InjectionSiteModal';
+import AddPastDoseModal, { type PastDosePayload } from '../../components/AddPastDoseModal';
+import WeightLossInsights from '../../components/WeightLossInsights';
 import WaterTrackerCard from '../../components/WaterTrackerCard';
 import PenStockCard from '../../components/PenStockCard';
 import { useAuth } from '../../context/AuthContext';
 import { checkSuperAdmin, loadPatientData, savePatientData } from '../../lib/backend';
 import { ACTIVE_INGREDIENT_LABEL, findMedication } from '../../data/medications';
 import { activePhase, adherenceRate, ageFromBirth, cycleProgress, doseAtDate, doseStatus, fmtDateLong, fmtDateMedium, fmtMg, imcInfo, nextDoseDate, nextPhase, relativeDays, sortedPhases, treatmentWeek, upcomingDates, WEEKDAY_NAMES } from '../../lib/schedule';
-import type { InjectionSite, PatientData, PenStock, Treatment } from '../../lib/types';
+import type { DoseLog, InjectionSite, PatientData, PenStock, Treatment } from '../../lib/types';
 import { INJECTION_SITE_LABELS } from '../../lib/types';
 import { generateMedicationGuidance } from '../../lib/llm';
 import { cn } from '../../utils/cn';
@@ -254,7 +259,7 @@ function WeightSparkline({ weights }: { weights: { date: string; kg: number }[] 
 export default function Dashboard() {
   const { user, loading, signOut } = useAuth();
   const [tab, setTab] = useState<Tab>('inicio');
-  const [editing, setEditing] = useState(false);
+  const [onboardingMode, setOnboardingMode] = useState<'edit' | 'new_cycle' | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -395,6 +400,50 @@ export default function Dashboard() {
   }, [treatment, next]);
 
   const appliedLogs = data?.logs ?? [];
+  const doseBreakdown = useMemo(() => {
+    if (appliedLogs.length === 0) return [];
+    const groups: Record<string, { medId: string; logs: DoseLog[] }> = {};
+    for (const l of appliedLogs) {
+      if (!groups[l.medId]) {
+        groups[l.medId] = { medId: l.medId, logs: [] };
+      }
+      groups[l.medId].logs.push(l);
+    }
+
+    return Object.values(groups).map((g) => {
+      const lm = findMedication(g.medId);
+      const sorted = [...g.logs].sort((a, b) => a.date.localeCompare(b.date));
+      const firstDate = new Date(sorted[0].date);
+      const lastDate = new Date(sorted[sorted.length - 1].date);
+      const isCurrentMed = treatment?.medId === g.medId;
+
+      let penForecastDate: string | null = null;
+      const totalPenDoses = data?.penStock?.totalDoses || 4;
+      const currentPenDosesUsed = data?.penStock?.dosesUsed ?? sorted.length;
+      const remainingDoses = Math.max(0, totalPenDoses - currentPenDosesUsed);
+
+      if (isCurrentMed && treatment) {
+        if (remainingDoses > 0) {
+          const forecast = new Date(lastDate);
+          forecast.setDate(forecast.getDate() + remainingDoses * (treatment.frequency === 'diaria' ? 1 : 7));
+          penForecastDate = forecast.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+        }
+      }
+
+      return {
+        medId: g.medId,
+        brand: lm?.brand ?? (g.medId.charAt(0).toUpperCase() + g.medId.slice(1)),
+        count: sorted.length,
+        firstDateStr: firstDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+        lastDateStr: lastDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }),
+        isCurrentMed,
+        penForecastDate,
+        totalPenDoses,
+      };
+    });
+  }, [appliedLogs, treatment, data?.penStock]);
+
+
   const lastWeight = data?.weights.length ? data.weights[data.weights.length - 1].kg : null;
   const weightDelta =
     lastWeight != null && profile?.startWeightKg != null ? Math.round((lastWeight - profile.startWeightKg) * 10) / 10 : null;
@@ -410,7 +459,8 @@ export default function Dashboard() {
   const [editingTarget, setEditingTarget] = useState(false);
   const [justApplied, setJustApplied] = useState(false);
   const [siteModalOpen, setSiteModalOpen] = useState(false);
-
+  const [pastDoseModalOpen, setPastDoseModalOpen] = useState(false);
+  
   // Rodízio de locais
   const lastSite = useMemo(() => {
     for (let i = appliedLogs.length - 1; i >= 0; i--) {
@@ -440,26 +490,34 @@ export default function Dashboard() {
     setSiteModalOpen(true);
   }
 
-  function handleConfirmDoseWithSite(site: InjectionSite, dateInput: string, notes?: string) {
+  function handleConfirmDoseWithSite(payload: ConfirmDosePayload) {
     if (!treatment) return;
     setSiteModalOpen(false);
 
-    // If the user selected a date, we append the current time to it to make a valid ISO string
-    // Or we just use `dateInput + "T12:00:00.000Z"`
-    const dateToLog = new Date(`${dateInput}T12:00:00`).toISOString();
-    
-    // We can calculate the dose based on that date, or use the current expected dose
-    const doseToLog = doseAtDate(treatment, new Date(dateToLog));
+    const dateToLog = new Date(`${payload.date}T12:00:00`).toISOString();
+    const doseToLog = payload.doseMg;
 
     update((prev) => {
-      // Se tiver caneta cadastrada, incrementa o uso
       const currentStock = prev.penStock;
-      const updatedStock: PenStock | null | undefined = currentStock
-        ? {
-            ...currentStock,
-            dosesUsed: currentStock.dosesUsed + 1,
-          }
-        : currentStock;
+      let updatedStock: PenStock | null | undefined = currentStock;
+
+      if (payload.isNewPen) {
+        const nextCycle = (currentStock?.cycleNumber || 1) + 1;
+        updatedStock = {
+          brand: med?.brand ?? 'Caneta GLP-1',
+          openedAt: payload.date,
+          totalDoses: payload.newPenTotalDoses || 4,
+          dosesUsed: 1, // esta já é a 1ª dose usada
+          expiryDays: payload.newPenExpiryDays || 56,
+          cycleNumber: nextCycle,
+          doseMg: doseToLog,
+        };
+      } else if (currentStock) {
+        updatedStock = {
+          ...currentStock,
+          dosesUsed: currentStock.dosesUsed + 1,
+        };
+      }
 
       return {
         ...prev,
@@ -471,8 +529,10 @@ export default function Dashboard() {
             date: dateToLog,
             doseMg: doseToLog,
             medId: treatment.medId,
-            site,
-            notes: notes?.trim() ? notes.trim() : undefined,
+            site: payload.site,
+            notes: payload.notes,
+            isNewPen: payload.isNewPen,
+            cycleNumber: updatedStock?.cycleNumber,
           },
         ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
       };
@@ -480,6 +540,27 @@ export default function Dashboard() {
 
     setJustApplied(true);
     window.setTimeout(() => setJustApplied(false), 2600);
+  }
+
+  function handleAddPastDose(payload: PastDosePayload) {
+    update((prev) => {
+      const newLog: DoseLog = {
+        id: uid(),
+        date: payload.date,
+        doseMg: payload.doseMg,
+        medId: payload.medId,
+        site: payload.site,
+        notes: payload.notes,
+        cycleNumber: payload.cycleNumber,
+      };
+      const updatedLogs = [...prev.logs, newLog].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      return {
+        ...prev,
+        logs: updatedLogs,
+      };
+    });
   }
 
   function handleUndoLog(id: string) {
@@ -702,13 +783,40 @@ export default function Dashboard() {
             </div>
 
             {/* Onboarding / edição */}
-            {(editing || !treatment) && (
-              <div className="mt-6 animate-fade-up">
+            {(onboardingMode || !treatment) && (
+              <div id="onboarding-wizard" className="mt-6 animate-fade-up">
                 <Onboarding
-                  initial={treatment}
+                  mode={onboardingMode ?? 'initial'}
+                  initial={onboardingMode === 'new_cycle' ? null : treatment}
                   onSubmit={(t) => {
-                    update((prev) => ({ ...prev, treatment: t }));
-                    setEditing(false);
+                    const isNewCycle = onboardingMode === 'new_cycle';
+                    update((prev) => {
+                      const nextTreatment = t;
+                      let updatedStock = prev.penStock;
+
+                      if (isNewCycle || !prev.penStock) {
+                        const nextCycleNum = (prev.penStock?.cycleNumber || 0) + 1;
+                        const newMed = findMedication(t.medId);
+                        const isShort = t.medId.includes('saxenda') || t.medId.includes('mounjaro');
+                        updatedStock = {
+                          brand: newMed?.brand ?? 'Caneta GLP-1',
+                          openedAt: t.startDate,
+                          totalDoses: t.frequency === 'diaria' ? 30 : 4,
+                          dosesUsed: 0,
+                          expiryDays: isShort ? 30 : 56,
+                          cycleNumber: nextCycleNum,
+                          doseMg: t.doseMg,
+                        };
+                      }
+
+                      return {
+                        ...prev,
+                        treatment: nextTreatment,
+                        penStock: updatedStock,
+                      };
+                    });
+
+                    setOnboardingMode(null);
                     
                     // Dispara a geração da nota orientadora da IA (assíncrono)
                     if (data?.profile) {
@@ -731,7 +839,7 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                       }).catch(console.error);
                     }
                   }}
-                  onCancel={editing ? () => setEditing(false) : undefined}
+                  onCancel={treatment ? () => setOnboardingMode(null) : undefined}
                 />
               </div>
             )}
@@ -824,7 +932,20 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                               </>
                             )}
                           </Button>
-                          <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white">
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              setOnboardingMode('new_cycle');
+                              setTimeout(() => {
+                                document.getElementById('onboarding-wizard')?.scrollIntoView({ behavior: 'smooth' });
+                              }, 50);
+                            }}
+                            variant="secondary"
+                            className="!border-teal-500/40 !bg-teal-500/20 !text-teal-200 hover:!bg-teal-500/30 !px-4 !py-3 text-xs font-bold"
+                          >
+                            <PackagePlus className="h-4 w-4 text-teal-300" /> Nova caneta / ciclo
+                          </Button>
+                          <button onClick={() => setOnboardingMode('edit')} className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white">
                             <Pencil className="h-3.5 w-3.5" /> Editar tratamento
                           </button>
                         </div>
@@ -1010,11 +1131,63 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                     </Card>
 
                     <Card className="p-5">
-                      <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Doses aplicadas
-                      </p>
-                      <p className="mt-1.5 text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">{appliedLogs.length}</p>
-                      <p className="mt-1.5 text-[10px] font-semibold text-slate-400">desde o início do tratamento</p>
+                      <div className="flex items-center justify-between">
+                        <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-brand-600" /> Doses aplicadas
+                        </p>
+                        <span className="text-xl font-extrabold text-slate-900 dark:text-white">
+                          {appliedLogs.length}
+                          <span className="text-xs font-semibold text-slate-400"> total</span>
+                        </span>
+                      </div>
+
+                      {doseBreakdown.length > 0 ? (
+                        <div className="mt-3 space-y-2 border-t border-slate-100 pt-2.5 dark:border-slate-800">
+                          {doseBreakdown.map((item) => (
+                            <div key={item.medId} className="rounded-xl bg-slate-50 p-2.5 dark:bg-slate-800/60 text-xs">
+                              <div className="flex items-center justify-between">
+                                <span className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                  <span className="h-2 w-2 rounded-full bg-brand-500" />
+                                  {item.count} dose{item.count > 1 ? 's' : ''} de <strong>{item.brand}</strong>
+                                </span>
+                                {item.isCurrentMed && (
+                                  <span className="rounded-md bg-teal-100 px-1.5 py-0.5 text-[9px] font-bold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                                    Em uso
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 text-[10px] text-slate-500">
+                                Período: {item.firstDateStr} a {item.lastDateStr}
+                                {item.penForecastDate && (
+                                  <span className="block mt-0.5 text-teal-700 dark:text-teal-300 font-semibold">
+                                    • Última dose da caneta prevista: <strong>{item.penForecastDate}</strong>
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          ))}
+
+                          {treatment && !appliedLogs.some((l) => l.medId === treatment.medId) && (
+                            <div className="rounded-xl border border-dashed border-teal-300 bg-teal-50/50 p-2.5 text-xs text-teal-900 dark:bg-teal-950/30 dark:text-teal-200">
+                              <div className="flex items-center justify-between">
+                                <strong className="font-extrabold">{med?.brand ?? 'Nova caneta'}</strong>
+                                <button
+                                  type="button"
+                                  onClick={handleStartApplyDose}
+                                  className="rounded-lg bg-teal-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-teal-700 shadow-sm"
+                                >
+                                  + Aplicar dose de hoje
+                                </button>
+                              </div>
+                              <p className="text-[10px] text-teal-700 dark:text-teal-300 mt-1">
+                                0 de 4 aplicadas nesta caneta · Registre a 1ª aplicação de hoje (10ª dose da sua jornada).
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[10px] text-slate-400 italic">Nenhuma aplicação registrada</p>
+                      )}
                     </Card>
                   </div>
                 </div>
@@ -1024,15 +1197,39 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                   <Card className="p-6 lg:col-span-2">
                     <SectionTitle icon={<TrendingDown className="h-4 w-4 text-brand-600" />} title="Evolução do peso" subtitle={`Peso inicial: ${profile?.startWeightKg != null ? `${profile.startWeightKg.toLocaleString('pt-BR')} kg` : '—'} · Altura: ${profile?.heightCm ?? '—'} cm`} />
                     <WeightSparkline weights={data?.weights ?? []} />
+                    <WeightLossInsights
+                      weights={data?.weights ?? []}
+                      startWeightKg={profile?.startWeightKg}
+                      targetWeightKg={data?.targetWeightKg}
+                      heightCm={profile?.heightCm}
+                      onEditTarget={() => setEditingTarget(true)}
+                    />
                   </Card>
 
                   <Card className="p-6">
-                    <SectionTitle icon={<ClipboardList className="h-4 w-4 text-brand-600" />} title="Histórico" subtitle="últimas aplicações" />
+                    <div className="flex items-center justify-between mb-2">
+                      <SectionTitle icon={<ClipboardList className="h-4 w-4 text-brand-600" />} title="Histórico" subtitle="últimas aplicações" />
+                      <button
+                        type="button"
+                        onClick={() => setPastDoseModalOpen(true)}
+                        className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 transition-colors"
+                        title="Adicionar dose passada / retroativa"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Dose anterior
+                      </button>
+                    </div>
                     <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                       {appliedLogs.length === 0 && (
-                        <p className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400 dark:border-slate-700">
-                          Nenhuma dose registrada ainda. Toque em “Registrar dose aplicada”. 💉
-                        </p>
+                        <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400 dark:border-slate-700 space-y-2.5">
+                          <p>Nenhuma dose registrada ainda. Toque em “Registrar dose aplicada” 💉</p>
+                          <button
+                            type="button"
+                            onClick={() => setPastDoseModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-950 dark:text-brand-300 transition-colors"
+                          >
+                            <History className="h-3.5 w-3.5" /> + Registrar aplicação anterior / retroativa
+                          </button>
+                        </div>
                       )}
                       {[...appliedLogs]
                         .sort((a, b) => b.date.localeCompare(a.date))
@@ -1045,8 +1242,13 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                                 {lm?.brand.slice(0, 2).toUpperCase() ?? '—'}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-xs font-extrabold text-slate-800 dark:text-slate-100">
-                                  {lm?.brand ?? 'Medicação'} · {fmtMg(l.doseMg)}
+                                <p className="truncate text-xs font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                                  <span>{lm?.brand ?? 'Medicação'} · {fmtMg(l.doseMg)}</span>
+                                  {l.isNewPen && (
+                                    <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[9px] font-bold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                                      Nova Caneta ✨
+                                    </span>
+                                  )}
                                 </p>
                                 <p className="text-[10px] font-semibold text-slate-400">
                                   {new Date(l.date).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -1057,7 +1259,7 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                                   )}
                                 </p>
                               </div>
-                              <button onClick={() => handleUndoLog(l.id)} className="rounded-lg p-1.5 text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500" title="Desfazer registro">
+                              <button onClick={() => { if (window.confirm('Excluir este registro de aplicação?')) handleUndoLog(l.id); }} className="rounded-lg p-1.5 text-slate-300 transition-colors hover:bg-rose-50 hover:text-rose-500" title="Excluir este registro">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
@@ -1087,6 +1289,12 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                     brand={med?.brand ?? 'Caneta GLP-1'}
                     stock={data?.penStock}
                     onUpdateStock={handleUpdatePenStock}
+                    onStartNewCycle={() => {
+                      setOnboardingMode('new_cycle');
+                      setTimeout(() => {
+                        document.getElementById('onboarding-wizard')?.scrollIntoView({ behavior: 'smooth' });
+                      }, 50);
+                    }}
                   />
                 </div>
 
@@ -1152,7 +1360,15 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
         </div>
       </nav>
 
-      {/* Modal de Rodízio do Local de Injeção */}
+      {/* Modal de Adicionar Dose Passada / Retroativa */}
+      <AddPastDoseModal
+        isOpen={pastDoseModalOpen}
+        onClose={() => setPastDoseModalOpen(false)}
+        defaultMedId={treatment?.medId}
+        onAddPastDose={handleAddPastDose}
+      />
+
+      {/* Modal de Rodízio do Local de Injeção e Ajuste de Dose */}
       <InjectionSiteModal
         isOpen={siteModalOpen}
         onClose={() => setSiteModalOpen(false)}
@@ -1160,8 +1376,12 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
         lastSite={lastSite}
         suggestedSite={suggestedSite}
         doseMg={treatment ? doseAtDate(treatment, new Date()) : 0}
+        availableDoses={med?.doses}
+        medBrand={med?.brand}
+        currentPenStock={data?.penStock}
       />
-    </div>
+
+      </div>
   );
 }
 

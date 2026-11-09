@@ -139,12 +139,12 @@ export default function AdminPanel() {
 /* ================= Ferramentas do admin ================= */
 
 const PROVIDERS = [
-  { id: 'openai',     label: 'OpenAI (GPT)',       models: ['gpt-4o-mini', 'gpt-4o', 'gpt-3.5-turbo', 'o1-mini'],                                                           placeholder: 'sk-...' },
-  { id: 'groq',       label: 'Groq',                models: ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'gemma2-9b-it'],                  placeholder: 'gsk_...' },
-  { id: 'openrouter', label: 'OpenRouter',          models: ['openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'google/gemini-flash-1.5', 'mistralai/mixtral-8x7b-instruct'], placeholder: 'sk-or-...' },
-  { id: 'deepinfra',  label: 'DeepInfra',           models: ['meta-llama/Meta-Llama-3.1-70B-Instruct', 'meta-llama/Meta-Llama-3-8B-Instruct', 'mistralai/Mixtral-8x7B-Instruct-v0.1'], placeholder: 'sua chave DeepInfra' },
-  { id: 'gemini',     label: 'Google Gemini',       models: ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash-lite'],                             placeholder: 'AIza...' },
-  { id: 'anthropic',  label: 'Anthropic (Claude)',  models: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'],                           placeholder: 'sk-ant-...' },
+  { id: 'openai',     label: 'OpenAI (GPT)',       models: ['gpt-4o-mini', 'gpt-4o', 'o1-mini'],                                                            placeholder: 'sk-proj-...' },
+  { id: 'deepinfra',  label: 'DeepInfra',           models: ['meta-llama/Meta-Llama-3.1-70B-Instruct', 'meta-llama/Meta-Llama-3-8B-Instruct'],                placeholder: 'sua chave DeepInfra' },
+  { id: 'openrouter', label: 'OpenRouter',          models: ['openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct'],                                     placeholder: 'sk-or-...' },
+  { id: 'groq',       label: 'Groq',                models: ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b'],                                placeholder: 'gsk_...' },
+  { id: 'gemini',     label: 'Google Gemini',       models: ['gemini-3.8-flash'],                                                                             placeholder: 'sua chave Gemini' },
+  { id: 'anthropic',  label: 'Anthropic (Claude)',  models: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'],                                      placeholder: 'sk-ant-...' },
 ];
 
 function AdminTools() {
@@ -178,6 +178,15 @@ function AdminTools() {
           setModel(data.model ?? '');
           setEnabled(data.enabled !== false);
           setLoadedHint(data.apiKeyHint ?? null);
+          const synched: LLMConfig = {
+            ...cfg,
+            provider: data.provider,
+            model: data.model ?? cfg.model,
+            enabled: data.enabled !== false,
+            apiKey: data.apiKeyHint ? 'configured_on_server' : cfg.apiKey,
+          };
+          setCfg(synched);
+          saveLLMConfig(synched);
         }
       })
       .catch(() => {});
@@ -213,6 +222,15 @@ function AdminTools() {
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar.');
       setSaveResult({ ok: true, msg: '✅ Configuração salva com sucesso no banco de dados!' });
       if (apiKey) { setLoadedHint(`...${apiKey.slice(-4)}`); setApiKey(''); }
+      const synched: LLMConfig = {
+        ...cfg,
+        provider: provider as any,
+        model,
+        enabled,
+        apiKey: 'configured_on_server',
+      };
+      setCfg(synched);
+      saveLLMConfig(synched);
     } catch (e) {
       setSaveResult({ ok: false, msg: e instanceof Error ? e.message : 'Erro desconhecido' });
     } finally {
@@ -401,7 +419,7 @@ function AdminTools() {
 
           <Card className="p-6">
             <SectionTitle icon={<Sparkles className="h-4 w-4 text-brand-600" />} title="Teste de geração" subtitle="paciente exemplo: Ozempic 0,5 mg · 78 kg · 165 cm" />
-            <Button onClick={handleGenerateSample} disabled={genBusy || !cfg.apiKey} className="!px-4 !py-2.5 text-xs">
+            <Button onClick={handleGenerateSample} disabled={genBusy || !(loadedHint || apiKey || cfg.apiKey)} className="!px-4 !py-2.5 text-xs">
               {genBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {genBusy ? 'Gerando cardápio de exemplo…' : 'Gerar cardápio de exemplo'}
             </Button>

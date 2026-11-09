@@ -287,10 +287,37 @@ const CONFIG_KEY = 'minhacaneta_llm_config';
 export function getLLMConfig(): LLMConfig | null {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
-    return raw ? (JSON.parse(raw) as LLMConfig) : null;
+    if (!raw) return null;
+    const cfg = JSON.parse(raw) as LLMConfig;
+    if (cfg && !cfg.apiKey && cfg.enabled) {
+      cfg.apiKey = 'configured_on_server';
+    }
+    return cfg;
   } catch {
     return null;
   }
+}
+
+export async function syncLLMConfigFromServer(): Promise<LLMConfig | null> {
+  try {
+    const res = await fetch('/api/settings');
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data?.provider && data.enabled !== false) {
+      const existing = getLLMConfig();
+      const synched: LLMConfig = {
+        provider: data.provider,
+        model: data.model || existing?.model || 'gpt-4o-mini',
+        enabled: data.enabled !== false,
+        apiKey: data.apiKeyHint ? 'configured_on_server' : (existing?.apiKey || 'configured_on_server'),
+        systemPrompt: existing?.systemPrompt,
+        exercisePrompt: existing?.exercisePrompt,
+      };
+      saveLLMConfig(synched);
+      return synched;
+    }
+  } catch {}
+  return null;
 }
 
 export function saveLLMConfig(cfg: LLMConfig): void {
@@ -334,8 +361,7 @@ export function buildUserPrompt(treatment: Treatment | null, profile: Profile, w
 /* ---------- chamadas aos provedores ---------- */
 
 export async function requestLLM(_cfg: LLMConfig, prompt: string, maxTokens: number = 2000): Promise<string> {
-  const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-  const url = isLocal ? 'http://localhost:3000/api/llm' : '/api/llm';
+  const url = '/api/llm';
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, maxTokens }) });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error ?? `Erro HTTP ${res.status}`);
@@ -344,8 +370,7 @@ export async function requestLLM(_cfg: LLMConfig, prompt: string, maxTokens: num
 
 /** Executa chamada multimodal para envio de imagem (foto de receita médica). */
 export async function requestLLMVision(_cfg: LLMConfig, prompt: string, base64Data: string, mimeType: string = 'image/jpeg', maxTokens: number = 2000): Promise<string> {
-  const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-  const url = isLocal ? 'http://localhost:3000/api/vision' : '/api/vision';
+  const url = '/api/vision';
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, base64Data, mimeType, maxTokens }) });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error ?? `Erro HTTP ${res.status}`);
@@ -553,7 +578,8 @@ export async function analyzeMealText(text: string, cfg: LLMConfig | null): Prom
   if (!clean) return { description: '', proteinG: 0, fiberG: 0, kcal: 0, analyzedByAI: false };
 
   // Se tiver LLM configurada, tenta obter análise precisa via prompt
-  if (cfg?.enabled && cfg.apiKey && cfg.model) {
+  const activeCfg = cfg || getLLMConfig();
+  if (activeCfg?.enabled) {
     try {
       const prompt = `Você é um nutricionista especialista em cálculo de macronutrientes de alimentos da culinária brasileira.
 O paciente relatou que comeu: "${clean}".
@@ -566,7 +592,7 @@ Calcule com base em porções habituais do Brasil:
 Responda ESTRITAMENTE em formato JSON puro, sem markdown nem explicações adicionais, no seguinte formato:
 {"proteinG": 28, "fiberG": 4, "kcal": 350}`;
 
-      const resp = await requestLLM(cfg, prompt, 200);
+      const resp = await requestLLM(activeCfg, prompt, 200);
       const jsonStr = resp.replace(/```json/gi, '').replace(/```/g, '').trim();
       const match = jsonStr.match(/\{[\s\S]*\}/);
       if (match) {
@@ -708,7 +734,7 @@ export async function analyzePrescriptionImage(
   mimeType: string,
   cfg: LLMConfig | null,
 ): Promise<PrescriptionAnalysisResult> {
-  if (!cfg?.enabled || !cfg.apiKey) {
+  if (!cfg?.enabled) {
     throw new Error('LLM não está configurada no painel admin para realizar leitura de imagem.');
   }
 

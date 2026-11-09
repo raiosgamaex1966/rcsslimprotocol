@@ -6,6 +6,7 @@ import {
   Clock3,
   FileText,
   FlaskConical,
+  PackagePlus,
   ListChecks,
   LoaderCircle,
   Plus,
@@ -27,6 +28,7 @@ import { cn } from '../utils/cn';
 
 interface Props {
   initial?: Treatment | null;
+  mode?: 'initial' | 'edit' | 'new_cycle';
   onSubmit: (t: Treatment) => void;
   onCancel?: () => void;
 }
@@ -69,7 +71,7 @@ function rowsFromTitration(med?: Medication): PhaseRow[] {
   return rowsFromPhases(getTitration(med));
 }
 
-export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
+export default function Onboarding({ initial, mode = 'initial', onSubmit, onCancel }: Props) {
   const [medId, setMedId] = useState(initial?.medId ?? '');
   const [dosageMode, setDosageMode] = useState<DosageMode>(initial?.phases?.length ? 'schedule' : 'fixed');
   const [dose, setDose] = useState<number | ''>(initial?.doseMg ?? '');
@@ -118,7 +120,7 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
     if (!prescriptionImage) return;
 
     const cfg = getLLMConfig();
-    if (!cfg || !cfg.enabled || !cfg.apiKey) {
+    if (!cfg || !cfg.enabled) {
       setError('Para ler a imagem com Inteligência Artificial, configure primeiro um provedor de LLM (como Google Gemini ou OpenAI) na área do Super Admin.');
       return;
     }
@@ -321,12 +323,14 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
         <div>
           <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-teal-600 text-white shadow-md shadow-brand-500/30">
-              <Syringe className="h-4.5 w-4.5" />
+              {mode === 'new_cycle' ? <PackagePlus className="h-4.5 w-4.5" /> : <Syringe className="h-4.5 w-4.5" />}
             </span>
-            {initial ? 'Editar meu tratamento' : 'Configure seu tratamento'}
+            {mode === 'new_cycle' ? 'Iniciar Nova Caneta / Novo Ciclo' : initial ? 'Editar meu tratamento' : 'Configure seu tratamento'}
           </h2>
           <p className="mt-1.5 max-w-lg text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">
-            Escolha a caneta e informe como o médico prescreveu: dose única ou <b>esquema progressivo</b> (ex.: 1ª–4ª semanas 0,25 mg → 5ª–8ª 0,5 mg → 9ª+ 1,0 mg).
+            {mode === 'new_cycle'
+              ? 'Selecione sua nova caneta. Você pode enviar/fotografar a nova receita médica para a IA preencher as doses automaticamente, definir as doses previstas e a data de início. Seu histórico anterior continuará preservado!'
+              : 'Escolha a caneta e informe como o médico prescreveu: dose única ou esquema progressivo (ex.: 1ª–4ª semanas 0,25 mg → 5ª–8ª 0,5 mg → 9ª+ 1,0 mg).'}
           </p>
         </div>
         {onCancel && (
@@ -722,7 +726,7 @@ export default function Onboarding({ initial, onSubmit, onCancel }: Props) {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Button onClick={handleSubmit}>
               <Save className="h-4 w-4" />
-              {initial ? 'Salvar alterações' : 'Começar a acompanhar'}
+              {mode === 'new_cycle' ? 'Confirmar e Iniciar Nova Caneta' : initial ? 'Salvar alterações' : 'Começar a acompanhar'}
             </Button>
             <p className="text-[11px] text-slate-400">O app calcula a dose certa de cada semana automaticamente. Confirme sempre com seu médico.</p>
           </div>

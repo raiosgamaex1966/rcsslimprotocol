@@ -118,7 +118,24 @@ export default function NutritionTab({ userId, data, update }: Props) {
   const days: DayMenu[] = useMemo(() => aiDays ?? fallbackMenu?.days ?? [], [aiDays, fallbackMenu]);
 
   const llmCfg = getLLMConfig();
-  const aiConfigured = Boolean(llmCfg?.enabled && llmCfg.apiKey && llmCfg.model);
+  const [serverAiConfigured, setServerAiConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.enabled && (data.apiKeyHint || data.provider)) {
+          setServerAiConfigured(true);
+        } else {
+          setServerAiConfigured(false);
+        }
+      })
+      .catch(() => setServerAiConfigured(false));
+  }, []);
+
+  const aiConfigured = serverAiConfigured !== null
+    ? serverAiConfigured
+    : Boolean(llmCfg?.enabled);
 
   const today = new Date().toISOString().slice(0, 10);
   const todayLog = nutritionLogs.find((n) => n.date === today);
@@ -216,11 +233,12 @@ export default function NutritionTab({ userId, data, update }: Props) {
   }
 
   async function generateWithAI() {
-    if (!targets || !treatment || !llmCfg) return;
+    if (!targets || !treatment) return;
     setAiBusy(true);
     setAiError(null);
     try {
-      const generated = await generateAIMenu(llmCfg, treatment, profile!, weightKg!, targets, doseMg, logs);
+      const activeCfg = llmCfg || { provider: 'openrouter', apiKey: 'configured_on_server', model: 'openai/gpt-4o-mini', enabled: true };
+      const generated = await generateAIMenu(activeCfg, treatment, profile!, weightKg!, targets, doseMg, logs);
       cacheAIMenu(userId, generated, menuSignature);
       setAiDays(generated);
     } catch (e) {

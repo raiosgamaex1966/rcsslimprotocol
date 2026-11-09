@@ -133,6 +133,8 @@ export interface DoseLog {
   medId: string;
   site?: InjectionSite;
   notes?: string;
+  cycleNumber?: number;
+  isNewPen?: boolean;
 }
 
 export interface PenStock {
@@ -141,6 +143,27 @@ export interface PenStock {
   dosesUsed: number;
   expiryDays: number; // 30 ou 56 dias
   brand: string;
+  cycleNumber?: number;
+  doseMg?: number;
+  notes?: string;
+}
+
+export interface LabExam {
+  id: string;
+  date: string; // yyyy-mm-dd
+  fastingGlucoseMgDl?: number; // Glicemia de jejum (mg/dL)
+  hba1cPercent?: number; // Hemoglobina glicada HbA1c (%)
+  insulinUuMl?: number; // Insulina basal (µUI/mL)
+  totalCholesterolMgDl?: number; // Colesterol total (mg/dL)
+  ldlCholesterolMgDl?: number; // LDL (mg/dL)
+  hdlCholesterolMgDl?: number; // HDL (mg/dL)
+  triglyceridesMgDl?: number; // Triglicerídeos (mg/dL)
+  tgoUl?: number; // TGO / AST (U/L)
+  tgpUl?: number; // TGP / ALT (U/L)
+  creatinineMgDl?: number; // Creatinina (mg/dL)
+  ureaMgDl?: number; // Ureia (mg/dL)
+  tshUiuMl?: number; // TSH (µUI/mL)
+  notes?: string;
 }
 
 export interface WaterLog {
@@ -240,6 +263,7 @@ export interface PatientData {
   nutritionOverride?: NutritionOverride;
   workoutOverride?: WorkoutPlanLike;
   savedMedicationIds?: string[]; // IDs de medicamentos salvos para consultas posteriores
+  labExams?: LabExam[];
 }
 
 /** Representação leve de um plano de treino (evita import circular com lib/exercise). */

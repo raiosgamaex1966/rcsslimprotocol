@@ -1,19 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Printer } from 'lucide-react';
+import {
+  ArrowLeft,
+  Droplet,
+  FlaskConical,
+  Plus,
+  Printer,
+  Utensils,
+} from 'lucide-react';
 import { Button } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { loadPatientData } from '../lib/backend';
+import { loadPatientData, savePatientData } from '../lib/backend';
 import { findMedication } from '../data/medications';
 import { adherenceRate, fmtDateMedium, fmtMg, imcInfo } from '../lib/schedule';
-import type { PatientData } from '../lib/types';
+import type { LabExam, PatientData } from '../lib/types';
 import { INJECTION_SITE_LABELS } from '../lib/types';
+import LabExamModal from '../components/LabExamModal';
 
 export default function MedicalReport() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<PatientData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [examModalOpen, setExamModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -37,6 +46,8 @@ export default function MedicalReport() {
   const logs = data?.logs ?? [];
   const weights = data?.weights ?? [];
   const symptoms = data?.symptomLogs ?? [];
+  const waterLogs = data?.waterLogs ?? [];
+  const labExams = data?.labExams ?? [];
 
   const startWeight = profile?.startWeightKg ?? (weights.length > 0 ? weights[0].kg : null);
   const currentWeight = weights.length > 0 ? weights[weights.length - 1].kg : startWeight;
@@ -50,8 +61,29 @@ export default function MedicalReport() {
   const currentImc = imcInfo(currentWeight, profile?.heightCm ?? null);
   const adherence = treatment ? adherenceRate(treatment, logs) : 0;
 
+  // Cálculos nutricionais e hidratação
+  const recommendedWaterMl = currentWeight ? Math.round(currentWeight * 35) : 3000;
+  const avgWaterMl =
+    waterLogs.length > 0
+      ? Math.round(waterLogs.reduce((acc, curr) => acc + (curr.ml || 0), 0) / waterLogs.length)
+      : 0;
+
+  // Meta de proteína (1.2 a 1.6 g/kg para GLP-1)
+  const targetProteinGMin = currentWeight ? Math.round(currentWeight * 1.2) : 100;
+  const targetProteinGMax = currentWeight ? Math.round(currentWeight * 1.6) : 150;
+
   function handlePrint() {
     window.print();
+  }
+
+  async function handleSaveExams(updatedExams: LabExam[]) {
+    if (!user?.id || !data) return;
+    const nextData: PatientData = {
+      ...data,
+      labExams: updatedExams,
+    };
+    setData(nextData);
+    await savePatientData(user.id, nextData);
   }
 
   return (
@@ -65,9 +97,18 @@ export default function MedicalReport() {
           <ArrowLeft className="h-4 w-4" /> Voltar ao Painel
         </button>
 
-        <Button onClick={handlePrint} className="!px-3 !py-1.5 sm:!px-4 sm:!py-2 text-xs">
-          <Printer className="h-4 w-4" /> Imprimir / Salvar PDF
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setExamModalOpen(true)}
+            className="!px-3 !py-1.5 sm:!px-4 sm:!py-2 text-xs"
+          >
+            <FlaskConical className="h-4 w-4 text-teal-600" /> Registrar Exames
+          </Button>
+          <Button onClick={handlePrint} className="!px-3 !py-1.5 sm:!px-4 sm:!py-2 text-xs">
+            <Printer className="h-4 w-4" /> Imprimir / Salvar PDF
+          </Button>
+        </div>
       </div>
 
       {/* Folha do Relatório */}
@@ -134,7 +175,7 @@ export default function MedicalReport() {
               </span>
             </p>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-              Dose semanal atual: <strong>{treatment ? fmtMg(treatment.doseMg) : '—'}</strong>
+              Dose atual: <strong>{treatment ? fmtMg(treatment.doseMg) : '—'}</strong> ({treatment?.frequency ?? 'semanal'})
             </p>
             <p className="text-xs text-slate-500">
               Início: {treatment?.startDate ? new Date(treatment.startDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
@@ -167,38 +208,175 @@ export default function MedicalReport() {
           </div>
         </div>
 
+        {/* NOVO: Hidratação & Proteína / Nutrição */}
+        <div className="mt-5 grid gap-3 sm:gap-4 sm:grid-cols-2">
+          {/* Hidratação */}
+          <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800 bg-sky-50/40 dark:bg-sky-950/20">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300 flex items-center gap-1.5">
+              <Droplet className="h-3.5 w-3.5 text-sky-600" /> Aporte Hídrico (Água)
+            </p>
+            <div className="mt-2 flex items-baseline justify-between">
+              <div>
+                <span className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  {avgWaterMl > 0 ? `${avgWaterMl} ml` : 'Em registro'}
+                </span>
+                <span className="text-xs text-slate-400 font-medium"> / dia (média)</span>
+              </div>
+              <span className="text-xs font-bold text-sky-700 dark:text-sky-300">
+                Meta: {recommendedWaterMl} ml/dia
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
+              * Fundamental para prevenir constipação e sobrecarga renal durante uso de GLP-1 (cálculo de 35 ml/kg).
+            </p>
+          </div>
+
+          {/* Proteína */}
+          <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800 bg-amber-50/40 dark:bg-amber-950/20">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+              <Utensils className="h-3.5 w-3.5 text-amber-600" /> Meta de Proteína (Massa Magra)
+            </p>
+            <div className="mt-2 flex items-baseline justify-between">
+              <div>
+                <span className="text-xl font-extrabold text-slate-900 dark:text-white">
+                  {targetProteinGMin}–{targetProteinGMax} g
+                </span>
+                <span className="text-xs text-slate-400 font-medium"> / dia</span>
+              </div>
+              <span className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                1,2 a 1,6 g/kg
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
+              * Recomendação clínica para preservação de massa muscular e manutenção da taxa metabólica basal.
+            </p>
+          </div>
+        </div>
+
+        {/* NOVO: Exames Laboratoriais */}
+        <div className="mt-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <FlaskConical className="h-3.5 w-3.5 text-teal-600" /> Exames Laboratoriais Registrados
+            </h3>
+            <button
+              onClick={() => setExamModalOpen(true)}
+              className="text-xs font-bold text-teal-600 hover:underline print:hidden flex items-center gap-1"
+            >
+              <Plus className="h-3 w-3" /> Adicionar / Gerenciar
+            </button>
+          </div>
+
+          {labExams.length > 0 ? (
+            <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
+              <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
+                <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-400 dark:bg-slate-800">
+                  <tr>
+                    <th className="p-3">Data</th>
+                    <th className="p-3">Glicemia</th>
+                    <th className="p-3">HbA1c</th>
+                    <th className="p-3">Insulina</th>
+                    <th className="p-3">Colesterol Tot.</th>
+                    <th className="p-3">LDL / HDL</th>
+                    <th className="p-3">Triglicerídeos</th>
+                    <th className="p-3">TGO / TGP</th>
+                    <th className="p-3">Creatinina</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {labExams.map((ex) => (
+                    <tr key={ex.id}>
+                      <td className="p-3 font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                        {new Date(ex.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="p-3">{ex.fastingGlucoseMgDl ? `${ex.fastingGlucoseMgDl} mg/dL` : '—'}</td>
+                      <td className="p-3 font-bold text-teal-600 dark:text-teal-400">{ex.hba1cPercent ? `${ex.hba1cPercent}%` : '—'}</td>
+                      <td className="p-3">{ex.insulinUuMl ? `${ex.insulinUuMl} µUI` : '—'}</td>
+                      <td className="p-3">{ex.totalCholesterolMgDl ? `${ex.totalCholesterolMgDl}` : '—'}</td>
+                      <td className="p-3">
+                        {ex.ldlCholesterolMgDl != null || ex.hdlCholesterolMgDl != null
+                          ? `${ex.ldlCholesterolMgDl ?? '—'} / ${ex.hdlCholesterolMgDl ?? '—'}`
+                          : '—'}
+                      </td>
+                      <td className="p-3">{ex.triglyceridesMgDl ? `${ex.triglyceridesMgDl}` : '—'}</td>
+                      <td className="p-3">
+                        {ex.tgoUl != null || ex.tgpUl != null
+                          ? `${ex.tgoUl ?? '—'} / ${ex.tgpUl ?? '—'}`
+                          : '—'}
+                      </td>
+                      <td className="p-3">{ex.creatinineMgDl ? `${ex.creatinineMgDl} mg/dL` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="mt-2 rounded-xl border border-dashed border-slate-200 p-3.5 text-center dark:border-slate-800 text-xs text-slate-400">
+              Nenhum exame laboratorial registrado ainda.{' '}
+              <button
+                onClick={() => setExamModalOpen(true)}
+                className="text-teal-600 font-bold hover:underline print:hidden"
+              >
+                Clique aqui para cadastrar seus exames.
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Histórico das Últimas Doses Aplicadas */}
         <div className="mt-6">
           <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-            Últimas Doses Registradas ({logs.length} aplicações no total)
+            Histórico Completo de Doses Aplicadas ({logs.length} {logs.length === 1 ? 'aplicação' : 'aplicações'} no total)
           </h3>
 
           {logs.length > 0 ? (
             <div className="mt-2 divide-y divide-slate-100 rounded-2xl border border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
-              {logs
-                .slice(-6)
-                .reverse()
-                .map((l) => (
-                  <div key={l.id} className="flex items-center justify-between p-3">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-white">
-                          {fmtDateMedium(new Date(l.date))}
+              {[...logs]
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .map((l, index) => {
+                  const logMed = findMedication(l.medId);
+                  const doseNumber = logs.length - index;
+                  return (
+                    <div key={l.id} className="flex items-center justify-between p-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                      <div className="flex items-center gap-2.5">
+                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-100 text-[10px] font-extrabold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          {doseNumber}
                         </span>
-                        <span className="ml-2 text-slate-500">Dose: {fmtMg(l.doseMg)}</span>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-bold text-slate-900 dark:text-white">
+                              {fmtDateMedium(new Date(l.date))}
+                            </span>
+                            <span className="text-slate-400 font-semibold">·</span>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">
+                              {logMed?.brand ?? 'Medicação'}
+                            </span>
+                            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-extrabold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                              {fmtMg(l.doseMg)}
+                            </span>
+                            {l.isNewPen && (
+                              <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[9px] font-bold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                                Início de Caneta ✨
+                              </span>
+                            )}
+                          </div>
+                          {l.notes && (
+                            <p className="mt-0.5 text-[11px] italic text-slate-400">
+                              "{l.notes}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {l.site && (
+                          <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            {INJECTION_SITE_LABELS[l.site]}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div>
-                      {l.site && (
-                        <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                          {INJECTION_SITE_LABELS[l.site]}
-                        </span>
-                      )}
-                      {l.notes && <span className="ml-2 italic text-slate-400">"{l.notes}"</span>}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           ) : (
             <p className="mt-2 text-xs italic text-slate-400">Nenhuma dose registrada ainda.</p>
@@ -252,6 +430,14 @@ export default function MedicalReport() {
           </p>
         </div>
       </div>
+
+      {/* Modal de Gerenciamento de Exames */}
+      <LabExamModal
+        isOpen={examModalOpen}
+        onClose={() => setExamModalOpen(false)}
+        exams={labExams}
+        onSaveExams={handleSaveExams}
+      />
     </div>
   );
 }

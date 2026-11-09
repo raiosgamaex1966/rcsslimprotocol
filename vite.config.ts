@@ -14,6 +14,13 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), viteSingleFile()],
   server: {
     host: true,
+    proxy: {
+      '/api': {
+        target: 'https://rcsslimprotocol.vercel.app',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
   },
   resolve: {
     alias: {

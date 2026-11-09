@@ -42,17 +42,23 @@ export function weekdayLabel(w: number): string {
 export function nextDoseDate(t: Treatment, logs: DoseLog[], now: Date = new Date()): Date {
   const interval = intervalDays(t);
   const last = lastAppliedDate(t, logs);
-  let next: Date;
-  if (last) {
-    next = addDays(last, interval);
-  } else {
-    const start = parseLocalDate(t.startDate);
-    next = addDays(start, interval);
-  }
-  // se já passou, rola para frente mantendo o dia da semana
   const today = dateOnly(now);
+  let next: Date;
+
+  if (last) {
+    next = addDays(dateOnly(last), interval);
+  } else {
+    // A primeira dose programada de um novo tratamento é a própria data de início!
+    next = parseLocalDate(t.startDate);
+  }
+
+  // Se a data já ficou no passado, avança em passos de intervalo mantendo a próxima data
   while (dateOnly(next) < today) {
-    next = addDays(next, interval);
+    const candidate = addDays(next, interval);
+    if (candidate > today) {
+      break;
+    }
+    next = candidate;
   }
   return next;
 }
@@ -90,13 +96,20 @@ export function cycleProgress(t: Treatment, logs: DoseLog[], now: Date = new Dat
 
 /** Taxa de adesão: doses aplicadas / doses programadas desde o início. */
 export function adherenceRate(t: Treatment, logs: DoseLog[], now: Date = new Date()): number {
+  if (logs.length === 0) return 0;
+
+  // Considera todo o histórico de doses aplicadas na jornada do paciente
+  const firstLog = logs.reduce((earliest, l) => l.date < earliest ? l.date : earliest, logs[0].date);
+  const firstDate = parseLocalDate(firstLog.slice(0, 10));
+  const treatmentStart = parseLocalDate(t.startDate);
+  const effectiveStart = firstDate < treatmentStart ? firstDate : treatmentStart;
+
   const interval = intervalDays(t);
-  const start = parseLocalDate(t.startDate);
-  const applied = logs.filter((l) => l.medId === t.medId && new Date(l.date) >= start).length;
-  const elapsed = Math.max(0, daysBetween(start, now));
-  const scheduled = Math.floor(elapsed / interval) + 1;
-  if (scheduled === 0) return 100;
-  return Math.min(100, Math.round((applied / scheduled) * 100));
+  const elapsedDays = Math.max(0, daysBetween(effectiveStart, dateOnly(now)));
+  if (elapsedDays === 0) return logs.length > 0 ? 100 : 0;
+
+  const scheduled = Math.max(1, Math.floor(elapsedDays / interval) + 1);
+  return Math.min(100, Math.round((logs.length / scheduled) * 100));
 }
 
 /* ---------------- formatação ---------------- */

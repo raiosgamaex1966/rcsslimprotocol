@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertCircle, PackageCheck, RefreshCw } from 'lucide-react';
+import { AlertCircle, PackageCheck, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
 import { Button, Card, SectionTitle } from './ui';
 import type { PenStock } from '../lib/types';
 import { cn } from '../utils/cn';
@@ -8,9 +8,10 @@ interface Props {
   brand: string;
   stock?: PenStock | null;
   onUpdateStock: (stock: PenStock | null) => void;
+  onStartNewCycle?: () => void;
 }
 
-export default function PenStockCard({ brand, stock, onUpdateStock }: Props) {
+export default function PenStockCard({ brand, stock, onUpdateStock, onStartNewCycle }: Props) {
   const [showConfig, setShowConfig] = useState(false);
   const [openedAt, setOpenedAt] = useState(new Date().toISOString().slice(0, 10));
   const [totalDoses, setTotalDoses] = useState(4);
@@ -27,8 +28,13 @@ export default function PenStockCard({ brand, stock, onUpdateStock }: Props) {
       totalDoses,
       dosesUsed: 0,
       expiryDays,
+      cycleNumber: (stock?.cycleNumber || 0) + 1,
     });
     setShowConfig(false);
+  }
+
+  function handleTriggerNewPen() {
+    setShowConfig((v) => !v);
   }
 
   // Cálculos se já tem caneta cadastrada
@@ -52,22 +58,40 @@ export default function PenStockCard({ brand, stock, onUpdateStock }: Props) {
       <div className="flex items-center justify-between">
         <SectionTitle
           icon={<PackageCheck className="h-4 w-4 text-brand-600" />}
-          title="Caneta em Uso"
+          title={`Caneta em Uso ${stock?.cycleNumber ? `· Ciclo #${stock.cycleNumber}` : ''}`}
           subtitle="Controle de validade e doses restantes"
         />
-        <button
-          onClick={() => setShowConfig((v) => !v)}
-          className="inline-flex items-center gap-1 text-xs font-bold text-brand-600 hover:text-brand-700 dark:text-brand-400"
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-          {stock ? 'Nova Caneta' : 'Cadastrar Caneta'}
-        </button>
+        <div className="flex items-center gap-2">
+          {stock && (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('Deseja excluir o registro da caneta atual em uso? O histórico de doses já aplicadas continuará preservado.')) {
+                  onUpdateStock(null);
+                }
+              }}
+              className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-600 hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-300 transition-colors"
+              title="Excluir / Limpar registro desta caneta"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Excluir</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleTriggerNewPen}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-950 dark:text-brand-300 transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {stock ? 'Nova Caneta' : 'Cadastrar Caneta'}
+          </button>
+        </div>
       </div>
 
       {showConfig && (
         <div className="mt-4 rounded-2xl border border-brand-200 bg-brand-50/50 p-4 animate-fade-in dark:border-brand-900/40 dark:bg-brand-950/20">
           <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-            Iniciar acompanhamento de uma nova caneta:
+            {stock ? 'Iniciar acompanhamento de uma nova caneta:' : 'Cadastrar caneta em uso:'}
           </p>
 
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -105,13 +129,27 @@ export default function PenStockCard({ brand, stock, onUpdateStock }: Props) {
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <Button variant="secondary" onClick={() => setShowConfig(false)} className="!py-1.5 !text-xs">
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveNewPen} className="!py-1.5 !text-xs">
-              Salvar Caneta
-            </Button>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-brand-200/60 pt-3 dark:border-brand-900/40">
+            {onStartNewCycle && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConfig(false);
+                  onStartNewCycle();
+                }}
+                className="text-[11px] font-bold text-brand-700 hover:underline dark:text-brand-300"
+              >
+                📄 Trocar medicação ou cadastrar via receita com IA →
+              </button>
+            )}
+            <div className="flex items-center gap-2 ml-auto">
+              <Button variant="secondary" onClick={() => setShowConfig(false)} className="!py-1.5 !text-xs">
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveNewPen} className="!py-1.5 !text-xs">
+                Salvar Caneta
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -160,33 +198,68 @@ export default function PenStockCard({ brand, stock, onUpdateStock }: Props) {
             </div>
           </div>
 
+          {/* Barra de Progresso de Doses Usadas */}
+          <div>
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
+              <span>Uso da caneta</span>
+              <span>
+                {stock.dosesUsed} de {stock.totalDoses} doses aplicadas (
+                {Math.round((stock.dosesUsed / stock.totalDoses) * 100)}%)
+              </span>
+            </div>
+            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <div
+                className={cn(
+                  'h-full rounded-full transition-all duration-500',
+                  dosesLeft <= 0 ? 'bg-amber-500' : 'bg-brand-500',
+                )}
+                style={{ width: `${Math.min(100, (stock.dosesUsed / stock.totalDoses) * 100)}%` }}
+              />
+            </div>
+          </div>
+
           {/* Avisos */}
-          {dosesLeft <= 1 && dosesLeft > 0 && (
-            <div className="flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
-              Resta apenas 1 dose nesta caneta! Lembre-se de providenciar a próxima caixa.
-            </div>
-          )}
-
-          {dosesLeft === 0 && (
-            <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
-              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-              Esta caneta chegou ao fim de todas as doses. Cadastre a nova caneta acima.
-            </div>
-          )}
-
           {expiredByDate && (
-            <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
-              <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
-              Atenção: Caneta ultrapassou os {stock.expiryDays} dias recomendados de abertura pela bula.
+            <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50/60 p-3 text-xs text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+              <div>
+                <strong>Atenção:</strong> Esta caneta ultrapassou o prazo de validade ({stock.expiryDays} dias após aberta). Descarte-a e inicie uma nova com segurança.
+              </div>
+            </div>
+          )}
+
+          {dosesLeft <= 0 && !expiredByDate && (
+            <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <div>
+                  <strong>Caneta finalizada!</strong> Todas as {stock.totalDoses} doses foram aplicadas.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleTriggerNewPen}
+                className="ml-2 shrink-0 rounded-lg bg-amber-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-amber-700 transition-colors"
+              >
+                + Nova Caneta
+              </button>
             </div>
           )}
         </div>
-      ) : (
-        <p className="mt-3 text-xs text-slate-400">
-          Nenhuma caneta registrada no momento. Clique em &quot;Cadastrar Caneta&quot; para acompanhar as doses restantes e o prazo de validade após a abertura.
-        </p>
-      )}
+      ) : !showConfig ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 p-5 text-center dark:border-slate-800">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Nenhuma caneta cadastrada em acompanhamento de estoque.
+          </p>
+          <button
+            onClick={() => setShowConfig(true)}
+            className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 hover:bg-brand-100 dark:bg-brand-950 dark:text-brand-300 transition-colors"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            Cadastrar minha primeira caneta
+          </button>
+        </div>
+      ) : null}
     </Card>
   );
 }

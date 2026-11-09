@@ -13,6 +13,8 @@ import InstallPrompt from './components/InstallPrompt';
 import ProfessionalRegister from './pages/ProfessionalRegister';
 import ProfessionalPortal from './pages/professional/ProfessionalPortal';
 import MedicalReport from './pages/MedicalReport';
+import { useEffect } from 'react';
+import { syncLLMConfigFromServer } from './lib/llm';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -35,6 +37,9 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    syncLLMConfigFromServer();
+  }, []);
   return (
     <ErrorBoundary>
       <ThemeProvider>
