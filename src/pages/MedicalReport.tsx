@@ -15,6 +15,7 @@ import { findMedication } from '../data/medications';
 import { adherenceRate, fmtDateMedium, fmtMg, imcInfo } from '../lib/schedule';
 import type { LabExam, PatientData } from '../lib/types';
 import { INJECTION_SITE_LABELS } from '../lib/types';
+import { cn } from '../utils/cn';
 import LabExamModal from '../components/LabExamModal';
 
 export default function MedicalReport() {
@@ -268,47 +269,107 @@ export default function MedicalReport() {
           </div>
 
           {labExams.length > 0 ? (
-            <div className="mt-2 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800">
-              <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
-                <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-400 dark:bg-slate-800">
-                  <tr>
-                    <th className="p-3">Data</th>
-                    <th className="p-3">Glicemia</th>
-                    <th className="p-3">HbA1c</th>
-                    <th className="p-3">Insulina</th>
-                    <th className="p-3">Colesterol Tot.</th>
-                    <th className="p-3">LDL / HDL</th>
-                    <th className="p-3">Triglicerídeos</th>
-                    <th className="p-3">TGO / TGP</th>
-                    <th className="p-3">Creatinina</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {labExams.map((ex) => (
-                    <tr key={ex.id}>
-                      <td className="p-3 font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                        {new Date(ex.date + 'T12:00:00').toLocaleDateString('pt-BR')}
-                      </td>
-                      <td className="p-3">{ex.fastingGlucoseMgDl ? `${ex.fastingGlucoseMgDl} mg/dL` : '—'}</td>
-                      <td className="p-3 font-bold text-teal-600 dark:text-teal-400">{ex.hba1cPercent ? `${ex.hba1cPercent}%` : '—'}</td>
-                      <td className="p-3">{ex.insulinUuMl ? `${ex.insulinUuMl} µUI` : '—'}</td>
-                      <td className="p-3">{ex.totalCholesterolMgDl ? `${ex.totalCholesterolMgDl}` : '—'}</td>
-                      <td className="p-3">
-                        {ex.ldlCholesterolMgDl != null || ex.hdlCholesterolMgDl != null
-                          ? `${ex.ldlCholesterolMgDl ?? '—'} / ${ex.hdlCholesterolMgDl ?? '—'}`
-                          : '—'}
-                      </td>
-                      <td className="p-3">{ex.triglyceridesMgDl ? `${ex.triglyceridesMgDl}` : '—'}</td>
-                      <td className="p-3">
-                        {ex.tgoUl != null || ex.tgpUl != null
-                          ? `${ex.tgoUl ?? '—'} / ${ex.tgpUl ?? '—'}`
-                          : '—'}
-                      </td>
-                      <td className="p-3">{ex.creatinineMgDl ? `${ex.creatinineMgDl} mg/dL` : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mt-2 space-y-3">
+              {labExams.map((ex) => {
+                const homa = ex.fastingGlucoseMgDl && ex.insulinUuMl
+                  ? Math.round(((ex.fastingGlucoseMgDl * ex.insulinUuMl) / 405) * 100) / 100
+                  : null;
+
+                return (
+                  <div key={ex.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 text-xs dark:border-slate-800 dark:bg-slate-900/60">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 pb-2.5 dark:border-slate-800">
+                      <span className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+                        <FlaskConical className="h-3.5 w-3.5 text-teal-600" /> Coleta realizada em: {new Date(ex.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                      </span>
+                      {ex.notes && (
+                        <span className="text-[11px] text-slate-500 italic max-w-xs truncate">
+                          {ex.notes}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                      {/* Glicemia / HOMA */}
+                      <div className="rounded-xl bg-white p-2.5 shadow-2xs dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60">
+                        <span className="text-[10px] font-bold uppercase text-slate-400 block">Glicemia & HbA1c</span>
+                        <p className="mt-0.5 font-extrabold text-slate-800 dark:text-slate-100">
+                          {ex.fastingGlucoseMgDl ? `${ex.fastingGlucoseMgDl} mg/dL` : '—'} · <span className={cn(ex.hba1cPercent && ex.hba1cPercent < 5.7 ? 'text-emerald-600' : 'text-amber-600')}>{ex.hba1cPercent ? `${ex.hba1cPercent}%` : '—'}</span>
+                        </p>
+                        {homa !== null && (
+                          <span className="text-[10px] font-semibold text-teal-600 block mt-0.5">
+                            HOMA-IR: {homa} ({homa <= 2.7 ? 'Normal' : 'Resist. Insulínica'})
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Função Renal */}
+                      <div className="rounded-xl bg-white p-2.5 shadow-2xs dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60">
+                        <span className="text-[10px] font-bold uppercase text-slate-400 block">Função Renal</span>
+                        <p className="mt-0.5 font-extrabold text-slate-800 dark:text-slate-100">
+                          Creatinina: {ex.creatinineMgDl ? `${ex.creatinineMgDl} mg/dL` : '—'}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          Ureia: {ex.ureaMgDl ? `${ex.ureaMgDl} mg/dL` : '—'} {ex.sodiumMEqL ? `· Na: ${ex.sodiumMEqL}` : ''} {ex.potassiumMEqL ? `· K: ${ex.potassiumMEqL}` : ''}
+                        </p>
+                      </div>
+
+                      {/* Lipídico */}
+                      <div className="rounded-xl bg-white p-2.5 shadow-2xs dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60">
+                        <span className="text-[10px] font-bold uppercase text-slate-400 block">Perfil Lipídico</span>
+                        <p className="mt-0.5 font-extrabold text-slate-800 dark:text-slate-100">
+                          Col. Tot: {ex.totalCholesterolMgDl ?? '—'} · LDL: {ex.ldlCholesterolMgDl ?? '—'}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          HDL: {ex.hdlCholesterolMgDl ?? '—'} · Triglicerídeos: {ex.triglyceridesMgDl ? `${ex.triglyceridesMgDl} mg/dL` : '—'}
+                        </p>
+                      </div>
+
+                      {/* Fígado & Pâncreas */}
+                      <div className="rounded-xl bg-white p-2.5 shadow-2xs dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60">
+                        <span className="text-[10px] font-bold uppercase text-slate-400 block">Fígado & Pâncreas</span>
+                        <p className="mt-0.5 font-extrabold text-slate-800 dark:text-slate-100">
+                          TGO: {ex.tgoUl ?? '—'} · TGP: {ex.tgpUl ?? '—'}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {ex.gamaGtUl ? `G-GT: ${ex.gamaGtUl} · ` : ''}{ex.lipaseUl ? `Lipase: ${ex.lipaseUl} · ` : ''}{ex.amylaseUl ? `Amilase: ${ex.amylaseUl}` : ''}
+                        </p>
+                      </div>
+
+                      {/* Tireoide */}
+                      {(ex.tshUiuMl != null || ex.t4FreeNgDl != null || ex.calcitoninPgMl != null) && (
+                        <div className="rounded-xl bg-white p-2.5 shadow-2xs dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Tireoide & Rastreio</span>
+                          <p className="mt-0.5 font-extrabold text-slate-800 dark:text-slate-100">
+                            TSH: {ex.tshUiuMl ? `${ex.tshUiuMl} µUI` : '—'} {ex.t4FreeNgDl ? `· T4L: ${ex.t4FreeNgDl}` : ''}
+                          </p>
+                          {ex.calcitoninPgMl != null && (
+                            <p className="text-[10px] text-slate-500">Calcitonina: {ex.calcitoninPgMl} pg/mL</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Nutricional & Massa Magra */}
+                      {(ex.albuminGDl != null || ex.vitaminDNgMl != null || ex.vitaminB12PgMl != null || ex.ferritinNgMl != null || ex.uricAcidMgDl != null) && (
+                        <div className="rounded-xl bg-white p-2.5 shadow-2xs dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 block">Nutrição & Massa Magra</span>
+                          <p className="mt-0.5 font-extrabold text-slate-800 dark:text-slate-100">
+                            {ex.albuminGDl ? `Albumina: ${ex.albuminGDl} g/dL · ` : ''}{ex.vitaminDNgMl ? `Vit D: ${ex.vitaminDNgMl} ng/mL` : ''}
+                          </p>
+                          <p className="text-[10px] text-slate-500">
+                            {ex.vitaminB12PgMl ? `B12: ${ex.vitaminB12PgMl} · ` : ''}{ex.ferritinNgMl ? `Ferritina: ${ex.ferritinNgMl} · ` : ''}{ex.uricAcidMgDl ? `Ác. Úrico: ${ex.uricAcidMgDl}` : ''}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {ex.ultrasoundNotes && (
+                      <div className="mt-2.5 rounded-xl border border-teal-200 bg-white p-2.5 text-xs text-teal-950 dark:border-teal-900/60 dark:bg-slate-800 dark:text-teal-200">
+                        <strong className="text-teal-800 dark:text-teal-300">Ultrassonografia Abdominal:</strong> {ex.ultrasoundNotes}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="mt-2 rounded-xl border border-dashed border-slate-200 p-3.5 text-center dark:border-slate-800 text-xs text-slate-400">

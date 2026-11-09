@@ -732,35 +732,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Barra de Abas Secundária para Celulares / Telas pequenas (abaixo do topo) */}
-        <div className="flex md:hidden border-t border-slate-100 px-3 py-1.5 overflow-x-auto dark:border-slate-800/80 gap-1 bg-slate-50/50 dark:bg-slate-900/50">
-          {(
-            [
-              ['inicio', 'Início', <LayoutDashboard key="i" className="h-3 w-3" />],
-              ['nutricao', 'Nutrição', <Apple key="n" className="h-3 w-3" />],
-              ['exercicios', 'Exercícios', <Dumbbell key="e" className="h-3 w-3" />],
-              ['medicamentos', 'Medicamentos', <Pill key="m" className="h-3 w-3" />],
-              ['perfil', 'Perfil', <Scale key="p" className="h-3 w-3" />],
-            ] as [Tab, string, React.ReactNode][]
-          ).map(([id, label, icon]) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold transition-all shrink-0',
-                tab === id
-                  ? 'bg-brand-600 text-white shadow-xs'
-                  : 'text-slate-500 hover:bg-slate-200/50 dark:text-slate-400',
-              )}
-            >
-              {icon}
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-      </header>
+        </header>
 
-      <main className="mx-auto max-w-6xl px-5 pt-7">
+      <main className="mx-auto max-w-6xl px-3.5 sm:px-5 pt-4 sm:pt-7">
         {!ready ? (
           <div className="grid place-items-center py-24">
             <div className="h-9 w-9 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
@@ -974,7 +948,7 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                     </div>
 
                     {/* Próximas doses */}
-                    <div className="relative mt-6 grid gap-2 border-t border-white/10 pt-5 sm:grid-cols-4">
+                    <div className="relative mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2 border-t border-white/10 pt-5">
                       {upcoming.map((d, i) => {
                         const ds = doseAtDate(treatment, d);
                         const changed = ds !== doseNext && i > 0;
@@ -1031,8 +1005,8 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                   </div>
 
                   {/* Coluna de estatísticas */}
-                  <div className="grid content-start grid-cols-2 gap-4 lg:grid-cols-1 lg:gap-4">
-                    <Card className="col-span-2 p-5 lg:col-span-1">
+                  <div className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
+                    <Card className="col-span-1 sm:col-span-2 lg:col-span-1 p-5">
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-400">

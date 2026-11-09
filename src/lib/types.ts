@@ -151,18 +151,40 @@ export interface PenStock {
 export interface LabExam {
   id: string;
   date: string; // yyyy-mm-dd
+  // Controle Glicêmico e Insulina
   fastingGlucoseMgDl?: number; // Glicemia de jejum (mg/dL)
   hba1cPercent?: number; // Hemoglobina glicada HbA1c (%)
   insulinUuMl?: number; // Insulina basal (µUI/mL)
+  // Perfil Lipídico
   totalCholesterolMgDl?: number; // Colesterol total (mg/dL)
   ldlCholesterolMgDl?: number; // LDL (mg/dL)
   hdlCholesterolMgDl?: number; // HDL (mg/dL)
   triglyceridesMgDl?: number; // Triglicerídeos (mg/dL)
+  // Função Hepática, Pâncreas & Vias Biliares
   tgoUl?: number; // TGO / AST (U/L)
   tgpUl?: number; // TGP / ALT (U/L)
+  gamaGtUl?: number; // Gama-GT (U/L)
+  alkalinePhosphataseUl?: number; // Fosfatase Alcalina (U/L)
+  totalBilirubinMgDl?: number; // Bilirrubina Total (mg/dL)
+  amylaseUl?: number; // Amilase (U/L)
+  lipaseUl?: number; // Lipase (U/L)
+  // Função Renal & Eletrólitos
   creatinineMgDl?: number; // Creatinina (mg/dL)
   ureaMgDl?: number; // Ureia (mg/dL)
+  sodiumMEqL?: number; // Sódio (mEq/L)
+  potassiumMEqL?: number; // Potássio (mEq/L)
+  // Tireoide & Segurança
   tshUiuMl?: number; // TSH (µUI/mL)
+  t4FreeNgDl?: number; // T4 Livre (ng/dL)
+  calcitoninPgMl?: number; // Calcitonina sérica (pg/mL)
+  // Nutricional & Massa Magra
+  albuminGDl?: number; // Albumina (g/dL)
+  uricAcidMgDl?: number; // Ácido Úrico (mg/dL)
+  vitaminDNgMl?: number; // Vitamina D 25-OH (ng/mL)
+  vitaminB12PgMl?: number; // Vitamina B12 (pg/mL)
+  ferritinNgMl?: number; // Ferritina (ng/mL)
+  // Exames de Imagem & Notas
+  ultrasoundNotes?: string; // Ultrassonografia de Abdômen (laudo)
   notes?: string;
 }
 
