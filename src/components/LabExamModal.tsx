@@ -1,7 +1,20 @@
 import { useState } from 'react';
-import { Calendar, FlaskConical, Plus, Trash2, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Calendar,
+  Camera,
+  CheckCircle,
+  FlaskConical,
+  LoaderCircle,
+  Plus,
+  Sparkles,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import { Button } from './ui';
 import type { LabExam } from '../lib/types';
+import { extractLabExamFromImages } from '../lib/llm';
 import { cn } from '../utils/cn';
 
 interface Props {
@@ -17,21 +30,27 @@ function uid() {
 
 export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Props) {
   const [showAddForm, setShowAddForm] = useState(false);
-    
+
+  // Upload e IA
+  const [uploadedImages, setUploadedImages] = useState<Array<{ id: string; name: string; dataUrl: string; mimeType: string }>>([]);
+  const [aiScanning, setAiScanning] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiSuccess, setAiSuccess] = useState<string | null>(null);
+
   // Dados do formulário
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  
+
   // Glicemia & Insulina
   const [fastingGlucose, setFastingGlucose] = useState('');
   const [hba1c, setHba1c] = useState('');
   const [insulin, setInsulin] = useState('');
-  
+
   // Renal & Eletrólitos
   const [creatinine, setCreatinine] = useState('');
   const [urea, setUrea] = useState('');
   const [sodium, setSodium] = useState('');
   const [potassium, setPotassium] = useState('');
-  
+
   // Fígado, Pâncreas & Vesícula
   const [tgo, setTgo] = useState('');
   const [tgp, setTgp] = useState('');
@@ -40,25 +59,28 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
   const [totalBilirubin, setTotalBilirubin] = useState('');
   const [amylase, setAmylase] = useState('');
   const [lipase, setLipase] = useState('');
-  
+
   // Perfil Lipídico
   const [totalCholesterol, setTotalCholesterol] = useState('');
   const [ldl, setLdl] = useState('');
   const [hdl, setHdl] = useState('');
   const [triglycerides, setTriglycerides] = useState('');
-  
+
   // Tireoide & Segurança
   const [tsh, setTsh] = useState('');
   const [t4Free, setT4Free] = useState('');
   const [calcitonin, setCalcitonin] = useState('');
-  
+
   // Nutricional & Massa Magra
   const [albumin, setAlbumin] = useState('');
   const [uricAcid, setUricAcid] = useState('');
   const [vitaminD, setVitaminD] = useState('');
   const [vitaminB12, setVitaminB12] = useState('');
   const [ferritin, setFerritin] = useState('');
-  
+
+  // Outros Exames (não listados nas caixas padrão, ex: Hemograma, PCR, etc.)
+  const [otherResults, setOtherResults] = useState('');
+
   // Ultrassom & Notas
   const [ultrasoundNotes, setUltrasoundNotes] = useState('');
   const [notes, setNotes] = useState('');
@@ -69,6 +91,97 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
   const gNum = parseFloat(fastingGlucose.replace(',', '.'));
   const iNum = parseFloat(insulin.replace(',', '.'));
   const homaIr = gNum > 0 && iNum > 0 ? Math.round(((gNum * iNum) / 405) * 100) / 100 : null;
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setAiError(null);
+    setAiSuccess(null);
+
+    const readPromises = Array.from(files).map((file) => {
+      return new Promise<{ id: string; name: string; dataUrl: string; mimeType: string }>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          resolve({
+            id: uid(),
+            name: file.name,
+            dataUrl: reader.result as string,
+            mimeType: file.type || 'image/jpeg',
+          });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readPromises).then((newImgs) => {
+      setUploadedImages((prev) => [...prev, ...newImgs]);
+      e.target.value = '';
+    });
+  }
+
+  function handleRemoveImage(id: string) {
+    setUploadedImages((prev) => prev.filter((img) => img.id !== id));
+  }
+
+  async function handleScanWithAI() {
+    if (uploadedImages.length === 0) {
+      setAiError('Adicione ao menos uma foto ou página do laudo para a IA analisar.');
+      return;
+    }
+    setAiScanning(true);
+    setAiError(null);
+    setAiSuccess(null);
+
+    const payload = uploadedImages.map((img) => ({
+      data: img.dataUrl,
+      mimeType: img.mimeType,
+    }));
+
+    const res = await extractLabExamFromImages(payload);
+    setAiScanning(false);
+
+    if (!res.success || !res.data) {
+      setAiError(res.error || 'Não foi possível interpretar o laudo.');
+      return;
+    }
+
+    const d = res.data;
+    let foundCount = 0;
+
+    if (d.date) { setDate(d.date); foundCount++; }
+    if (d.fastingGlucoseMgDl != null) { setFastingGlucose(String(d.fastingGlucoseMgDl)); foundCount++; }
+    if (d.hba1cPercent != null) { setHba1c(String(d.hba1cPercent)); foundCount++; }
+    if (d.insulinUuMl != null) { setInsulin(String(d.insulinUuMl)); foundCount++; }
+    if (d.totalCholesterolMgDl != null) { setTotalCholesterol(String(d.totalCholesterolMgDl)); foundCount++; }
+    if (d.ldlCholesterolMgDl != null) { setLdl(String(d.ldlCholesterolMgDl)); foundCount++; }
+    if (d.hdlCholesterolMgDl != null) { setHdl(String(d.hdlCholesterolMgDl)); foundCount++; }
+    if (d.triglyceridesMgDl != null) { setTriglycerides(String(d.triglyceridesMgDl)); foundCount++; }
+    if (d.tgoUl != null) { setTgo(String(d.tgoUl)); foundCount++; }
+    if (d.tgpUl != null) { setTgp(String(d.tgpUl)); foundCount++; }
+    if (d.gamaGtUl != null) { setGamaGt(String(d.gamaGtUl)); foundCount++; }
+    if (d.alkalinePhosphataseUl != null) { setAlkalinePhosphatase(String(d.alkalinePhosphataseUl)); foundCount++; }
+    if (d.totalBilirubinMgDl != null) { setTotalBilirubin(String(d.totalBilirubinMgDl)); foundCount++; }
+    if (d.amylaseUl != null) { setAmylase(String(d.amylaseUl)); foundCount++; }
+    if (d.lipaseUl != null) { setLipase(String(d.lipaseUl)); foundCount++; }
+    if (d.creatinineMgDl != null) { setCreatinine(String(d.creatinineMgDl)); foundCount++; }
+    if (d.ureaMgDl != null) { setUrea(String(d.ureaMgDl)); foundCount++; }
+    if (d.sodiumMEqL != null) { setSodium(String(d.sodiumMEqL)); foundCount++; }
+    if (d.potassiumMEqL != null) { setPotassium(String(d.potassiumMEqL)); foundCount++; }
+    if (d.tshUiuMl != null) { setTsh(String(d.tshUiuMl)); foundCount++; }
+    if (d.t4FreeNgDl != null) { setT4Free(String(d.t4FreeNgDl)); foundCount++; }
+    if (d.calcitoninPgMl != null) { setCalcitonin(String(d.calcitoninPgMl)); foundCount++; }
+    if (d.albuminGDl != null) { setAlbumin(String(d.albuminGDl)); foundCount++; }
+    if (d.uricAcidMgDl != null) { setUricAcid(String(d.uricAcidMgDl)); foundCount++; }
+    if (d.vitaminDNgMl != null) { setVitaminD(String(d.vitaminDNgMl)); foundCount++; }
+    if (d.vitaminB12PgMl != null) { setVitaminB12(String(d.vitaminB12PgMl)); foundCount++; }
+    if (d.ferritinNgMl != null) { setFerritin(String(d.ferritinNgMl)); foundCount++; }
+    if (d.otherResults) { setOtherResults(d.otherResults); foundCount++; }
+    if (d.ultrasoundNotes) { setUltrasoundNotes(d.ultrasoundNotes); foundCount++; }
+    if (d.notes) { setNotes(d.notes); }
+
+    setAiSuccess(`Laudo analisado com sucesso! ${foundCount} parâmetro(s) identificados e preenchidos automaticamente. Confira os valores abaixo.`);
+  }
 
   function handleAddExam() {
     const parseNum = (v: string) => {
@@ -106,6 +219,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
       vitaminDNgMl: parseNum(vitaminD),
       vitaminB12PgMl: parseNum(vitaminB12),
       ferritinNgMl: parseNum(ferritin),
+      otherResults: otherResults.trim() ? otherResults.trim() : undefined,
       ultrasoundNotes: ultrasoundNotes.trim() ? ultrasoundNotes.trim() : undefined,
       notes: notes.trim() ? notes.trim() : undefined,
     };
@@ -115,7 +229,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
     );
     onSaveExams(next);
     setShowAddForm(false);
-    
+
     // Limpa campos
     setFastingGlucose('');
     setHba1c('');
@@ -143,8 +257,12 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
     setVitaminD('');
     setVitaminB12('');
     setFerritin('');
+    setOtherResults('');
     setUltrasoundNotes('');
     setNotes('');
+    setUploadedImages([]);
+    setAiError(null);
+    setAiSuccess(null);
   }
 
   function handleDeleteExam(id: string) {
@@ -179,7 +297,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
             </p>
           </div>
           {!showAddForm && (
-            <Button onClick={() => setShowAddForm(true)} className="!py-1.5 !px-3 text-xs shrink-0 self-start sm:self-auto">
+            <Button onClick={() => setShowAddForm(true)} className="!py-1.5 !px-3 text-xs shrink-0 self-start sm:self-auto bg-teal-600 hover:bg-teal-700">
               <Plus className="h-3.5 w-3.5" /> Novo Exame
             </Button>
           )}
@@ -203,11 +321,120 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
               </div>
             </div>
 
-            <p className="mt-2.5 text-[11px] text-slate-500 dark:text-slate-400">
-              Preencha os exames que você realizou (não é obrigatório preencher todos):
+            {/* SEÇÃO NOVO: Upload e Leitura com IA */}
+            <div className="mt-3.5 rounded-2xl border-2 border-dashed border-teal-300 bg-gradient-to-br from-teal-50 via-white to-emerald-50/60 p-4 dark:border-teal-700/60 dark:from-teal-950/40 dark:via-slate-900 dark:to-teal-950/40">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-teal-600 text-white shadow-md shadow-teal-600/30">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                      Leitura Automática de Laudo com IA
+                      <span className="rounded-full bg-teal-600 px-2 py-0.5 text-[9px] font-bold text-white">IA OCR</span>
+                    </h5>
+                    <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
+                      Tire fotos de cada página pelo celular ou suba arquivos do computador. A IA lê e preenche todos os dados!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-teal-300 bg-white px-3 py-2 text-xs font-bold text-teal-700 shadow-xs transition hover:bg-teal-50 dark:border-teal-700 dark:bg-slate-800 dark:text-teal-300">
+                    <Upload className="h-3.5 w-3.5" /> Subir Fotos / PDF
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                  </label>
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-teal-300 bg-white px-3 py-2 text-xs font-bold text-teal-700 shadow-xs transition hover:bg-teal-50 dark:border-teal-700 dark:bg-slate-800 dark:text-teal-300">
+                    <Camera className="h-3.5 w-3.5" /> Tirar Foto
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleFileSelect}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Miniaturas das fotos enviadas */}
+              {uploadedImages.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-teal-200/70 dark:border-teal-800/60">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                      Páginas prontas para leitura ({uploadedImages.length}):
+                    </span>
+                    <label className="text-xs font-bold text-teal-600 hover:underline cursor-pointer flex items-center gap-1">
+                      <Plus className="h-3 w-3" /> Adicionar mais página
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2.5">
+                    {uploadedImages.map((img, idx) => (
+                      <div key={img.id} className="relative group rounded-xl border border-slate-200 bg-white p-1 shadow-xs dark:border-slate-700 dark:bg-slate-800">
+                        <img src={img.dataUrl} alt={img.name} className="h-16 w-16 object-cover rounded-lg" />
+                        <span className="absolute bottom-1.5 left-1.5 rounded bg-black/75 px-1 text-[9px] font-bold text-white">
+                          Pág. {idx + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(img.id)}
+                          className="absolute -top-1.5 -right-1.5 grid h-5 w-5 place-items-center rounded-full bg-rose-600 text-white shadow-xs hover:bg-rose-700"
+                          title="Remover esta página"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-3">
+                    <Button
+                      type="button"
+                      onClick={handleScanWithAI}
+                      disabled={aiScanning}
+                      className="!py-2 !px-4 text-xs font-extrabold bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-600/20"
+                    >
+                      {aiScanning ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      {aiScanning ? 'Analisando páginas do laudo com IA...' : 'Preencher Campos com Inteligência Artificial'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {aiError && (
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {aiError}
+                </div>
+              )}
+
+              {aiSuccess && (
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-2.5 text-xs text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">
+                  <CheckCircle className="h-4 w-4 shrink-0 text-emerald-600" />
+                  {aiSuccess}
+                </div>
+              )}
+            </div>
+
+            <p className="mt-3.5 text-[11px] text-slate-500 dark:text-slate-400">
+              Ou preencha/ajuste manualmente os exames que realizou (não é obrigatório preencher todos):
             </p>
 
-            <div className="mt-3.5 space-y-4">
+            <div className="mt-3 space-y-4">
               {/* 1. CONTROLE GLICÊMICO & INSULINA */}
               <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-850">
                 <div className="flex items-center justify-between">
@@ -257,14 +484,14 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
               {/* 2. FUNÇÃO RENAL & ELETRÓLITOS */}
               <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-850">
                 <span className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  💧 Função Renal & Eletrólitos (Proteção contra desidratação)
+                  💧 Função Renal & Eletrólitos
                 </span>
                 <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div>
                     <label className="text-[10px] font-semibold text-slate-400 block">Creatinina (mg/dL)</label>
                     <input
                       type="text"
-                      placeholder="Ex: 0,9 (Ref: 0,6-1,2)"
+                      placeholder="Ex: 0,9 (Ref: 0,7-1,3)"
                       value={creatinine}
                       onChange={(e) => setCreatinine(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-800"
@@ -274,14 +501,14 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                     <label className="text-[10px] font-semibold text-slate-400 block">Ureia (mg/dL)</label>
                     <input
                       type="number"
-                      placeholder="Ex: 28 (Ref: 15-45)"
+                      placeholder="Ex: 32 (Ref: 15-45)"
                       value={urea}
                       onChange={(e) => setUrea(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-800"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold text-slate-400 block">Sódio (mEq/L)</label>
+                    <label className="text-[10px] font-semibold text-slate-400 block">Sódio - Na (mEq/L)</label>
                     <input
                       type="number"
                       placeholder="Ex: 140 (Ref: 135-145)"
@@ -291,7 +518,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-semibold text-slate-400 block">Potássio (mEq/L)</label>
+                    <label className="text-[10px] font-semibold text-slate-400 block">Potássio - K (mEq/L)</label>
                     <input
                       type="text"
                       placeholder="Ex: 4,2 (Ref: 3,5-5,1)"
@@ -306,7 +533,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
               {/* 3. FÍGADO, PÂNCREAS & VIAS BILIARES */}
               <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-850">
                 <span className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  🫀 Fígado, Pâncreas & Vesícula Biliar
+                  🛡️ Fígado, Pâncreas & Vias Biliares
                 </span>
                 <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div>
@@ -323,7 +550,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                     <label className="text-[10px] font-semibold text-slate-400 block">TGP / ALT (U/L)</label>
                     <input
                       type="number"
-                      placeholder="Ex: 25 (Ref: < 35)"
+                      placeholder="Ex: 26 (Ref: < 35)"
                       value={tgp}
                       onChange={(e) => setTgp(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-800"
@@ -333,7 +560,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                     <label className="text-[10px] font-semibold text-slate-400 block">Gama-GT (U/L)</label>
                     <input
                       type="number"
-                      placeholder="Ex: 30 (Ref: < 50)"
+                      placeholder="Ex: 25 (Ref: < 40)"
                       value={gamaGt}
                       onChange={(e) => setGamaGt(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-800"
@@ -343,7 +570,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                     <label className="text-[10px] font-semibold text-slate-400 block">Fosfatase Alcalina (U/L)</label>
                     <input
                       type="number"
-                      placeholder="Ex: 65 (Ref: 40-130)"
+                      placeholder="Ex: 65 (Ref: 40-120)"
                       value={alkalinePhosphatase}
                       onChange={(e) => setAlkalinePhosphatase(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-800"
@@ -363,7 +590,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                     <label className="text-[10px] font-semibold text-slate-400 block">Amilase (U/L)</label>
                     <input
                       type="number"
-                      placeholder="Ex: 45 (Ref: 28-100)"
+                      placeholder="Ex: 55 (Ref: 28-100)"
                       value={amylase}
                       onChange={(e) => setAmylase(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-800"
@@ -373,7 +600,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                     <label className="text-[10px] font-semibold text-slate-400 block">Lipase (U/L)</label>
                     <input
                       type="number"
-                      placeholder="Ex: 38 (Ref: 13-60)"
+                      placeholder="Ex: 32 (Ref: 13-60)"
                       value={lipase}
                       onChange={(e) => setLipase(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-800"
@@ -385,14 +612,14 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
               {/* 4. PERFIL LIPÍDICO */}
               <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-850">
                 <span className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  🧪 Perfil Lipídico (Gorduras no Sangue)
+                  🫀 Perfil Lipídico & Risco Cardiovascular
                 </span>
                 <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div>
                     <label className="text-[10px] font-semibold text-slate-400 block">Colesterol Total (mg/dL)</label>
                     <input
                       type="number"
-                      placeholder="Ex: 185 (Ref: < 190)"
+                      placeholder="Ex: 175 (Ref: < 190)"
                       value={totalCholesterol}
                       onChange={(e) => setTotalCholesterol(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 p-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-800"
@@ -529,6 +756,27 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                 </div>
               </div>
 
+              {/* SEÇÃO NOVO: OUTROS EXAMES DO LAUDO (Hemograma, PCR, Hormônios adicionais, etc.) */}
+              <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-850">
+                <span className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  🧪 Outros Exames & Resultados (Hemograma, PCR, Cortisol, etc.)
+                </span>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Exames presentes no laudo que não constam nas caixas padronizadas acima (preenchido automaticamente pela IA ou manualmente):
+                </p>
+                <textarea
+                  rows={4}
+                  placeholder="Exemplo:
+• Hemograma: Hemácias 4.8 mi/mm³, Hemoglobina 14.2 g/dL, Leucócitos 6.400 /mm³, Plaquetas 245.000 /mm³
+• PCR Ultra-sensível: 0.5 mg/L
+• Cortisol basal: 12.0 mcg/dL
+• EAS / Urina: Normal"
+                  value={otherResults}
+                  onChange={(e) => setOtherResults(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs font-mono text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 focus:border-teal-500 focus:outline-hidden"
+                />
+              </div>
+
               {/* 7. ULTRASSOM & LAUDOS */}
               <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-850">
                 <span className="text-[11px] font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
@@ -570,72 +818,63 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
           </div>
         )}
 
-        {/* Lista de Exames Cadastrados */}
-        <div className="mt-4 space-y-3">
+        {/* Lista de Exames Anteriores */}
+        <div className="mt-5 space-y-3">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Histórico de Exames ({exams.length})
+          </h4>
+
           {exams.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center dark:border-slate-800">
-              <FlaskConical className="mx-auto h-8 w-8 text-slate-400 mb-2" />
-              <p className="text-xs text-slate-500 font-semibold">Nenhum exame laboratorial registrado ainda.</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Cadastre seus resultados para ter um acompanhamento completo no relatório.</p>
-              <button
-                type="button"
-                onClick={() => setShowAddForm(true)}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-700 hover:bg-teal-100 dark:bg-teal-950 dark:text-teal-300 transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" /> Adicionar primeiro exame
-              </button>
+            <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400 dark:border-slate-800">
+              Nenhum exame cadastrado ainda. Clique em <strong>Novo Exame</strong> para adicionar resultados manualmente ou fazer upload do laudo com Inteligência Artificial.
             </div>
           ) : (
             exams.map((exam) => {
-              const homa = exam.fastingGlucoseMgDl && exam.insulinUuMl
-                ? Math.round(((exam.fastingGlucoseMgDl * exam.insulinUuMl) / 405) * 100) / 100
-                : null;
+              const g = exam.fastingGlucoseMgDl;
+              const i = exam.insulinUuMl;
+              const h = g && i ? Math.round(((g * i) / 405) * 100) / 100 : null;
 
               return (
                 <div
                   key={exam.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-800/60"
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-850 text-xs"
                 >
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-700">
-                    <span className="font-extrabold text-xs text-slate-900 dark:text-white flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 text-teal-600" />
-                      Coleta em: {new Date(exam.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
+                    <span className="font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-teal-600" /> Coleta: {new Date(exam.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                     </span>
                     <button
                       onClick={() => handleDeleteExam(exam.id)}
-                      className="p-1 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-colors"
-                      title="Excluir exame"
+                      className="text-slate-400 hover:text-rose-600 transition"
+                      title="Excluir este exame"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
 
-                  {/* Badges de Destaque Clínico */}
-                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">
+                  <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {exam.fastingGlucoseMgDl != null && (
                       <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800">
-                        <span className="text-[10px] text-slate-400 block font-semibold">Glicemia</span>
+                        <span className="text-[10px] text-slate-400 block font-semibold">Glicemia Jejum</span>
                         <strong className="text-slate-800 dark:text-slate-100">{exam.fastingGlucoseMgDl} mg/dL</strong>
                       </div>
                     )}
                     {exam.hba1cPercent != null && (
                       <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800">
                         <span className="text-[10px] text-slate-400 block font-semibold">HbA1c</span>
-                        <strong className={cn("font-extrabold", exam.hba1cPercent < 5.7 ? "text-emerald-600" : "text-amber-600")}>
-                          {exam.hba1cPercent}%
-                        </strong>
+                        <strong className="text-slate-800 dark:text-slate-100">{exam.hba1cPercent}%</strong>
                       </div>
                     )}
                     {exam.insulinUuMl != null && (
                       <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800">
-                        <span className="text-[10px] text-slate-400 block font-semibold">Insulina</span>
+                        <span className="text-[10px] text-slate-400 block font-semibold">Insulina Basal</span>
                         <strong className="text-slate-800 dark:text-slate-100">{exam.insulinUuMl} µUI/mL</strong>
                       </div>
                     )}
-                    {homa !== null && (
-                      <div className="rounded-xl bg-teal-50/60 p-2 dark:bg-teal-950/40">
-                        <span className="text-[10px] text-teal-700 dark:text-teal-300 block font-semibold">HOMA-IR (Calc)</span>
-                        <strong className="text-teal-900 dark:text-teal-200">{homa}</strong>
+                    {h !== null && (
+                      <div className="rounded-xl bg-teal-50/50 p-2 dark:bg-teal-950/20">
+                        <span className="text-[10px] text-teal-600 block font-semibold">HOMA-IR</span>
+                        <strong className="text-teal-900 dark:text-teal-200">{h}</strong>
                       </div>
                     )}
                     {exam.creatinineMgDl != null && (
@@ -652,7 +891,7 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                     )}
                     {exam.totalCholesterolMgDl != null && (
                       <div className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800">
-                        <span className="text-[10px] text-slate-400 block font-semibold">Colesterol Total</span>
+                        <span className="text-[10px] text-slate-400 block font-semibold">Colest. Total</span>
                         <strong className="text-slate-800 dark:text-slate-100">{exam.totalCholesterolMgDl} mg/dL</strong>
                       </div>
                     )}
@@ -754,6 +993,13 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                     )}
                   </div>
 
+                  {exam.otherResults && (
+                    <div className="mt-2.5 rounded-xl border border-teal-200 bg-teal-50/60 p-2.5 text-xs text-slate-800 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-slate-200">
+                      <span className="font-bold text-teal-800 dark:text-teal-300 block mb-0.5">Outros Exames do Laudo:</span>
+                      <p className="whitespace-pre-line font-mono text-[11px] leading-relaxed">{exam.otherResults}</p>
+                    </div>
+                  )}
+
                   {exam.ultrasoundNotes && (
                     <div className="mt-2.5 rounded-xl border border-teal-100 bg-teal-50/50 p-2.5 text-xs text-teal-900 dark:border-teal-900/50 dark:bg-teal-950/30 dark:text-teal-200">
                       <strong>Ultrassom de Abdômen:</strong> {exam.ultrasoundNotes}
@@ -761,18 +1007,14 @@ export default function LabExamModal({ isOpen, onClose, exams, onSaveExams }: Pr
                   )}
 
                   {exam.notes && (
-                    <p className="mt-2 text-[11px] italic text-slate-500">"{exam.notes}"</p>
+                    <div className="mt-1 text-[11px] text-slate-500 italic">
+                      Obs: {exam.notes}
+                    </div>
                   )}
                 </div>
               );
             })
           )}
-        </div>
-
-        <div className="mt-6 flex justify-end">
-          <Button onClick={onClose} className="!py-2 !px-5 text-xs">
-            Concluído
-          </Button>
         </div>
       </div>
     </div>

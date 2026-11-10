@@ -1,4 +1,4 @@
-// api/vision.js — OCR de receitas médicas usando config salva no Supabase
+// api/vision.js — OCR de receitas médicas e laudos laboratoriais usando config salva no Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -17,6 +17,18 @@ export default async function handler(req, res) {
 
   const { prompt, base64Data, mimeType, maxTokens } = req.body;
 
+  // Suporte a múltiplas imagens (páginas do laudo) ou imagem única
+  let imageList = [];
+  if (Array.isArray(req.body.images) && req.body.images.length > 0) {
+    imageList = req.body.images;
+  } else if (base64Data) {
+    imageList = [{ data: base64Data, mimeType: mimeType || 'image/jpeg' }];
+  }
+
+  if (imageList.length === 0) {
+    return res.status(400).json({ error: 'Nenhuma imagem foi enviada.' });
+  }
+
   let cfg = await getLLMConfig();
   if (!cfg?.llm_api_key) {
     cfg = {
@@ -34,18 +46,28 @@ export default async function handler(req, res) {
   const provider = cfg.llm_provider;
   const apiKey = cfg.llm_api_key;
   const model = cfg.llm_model;
-  const pureBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
-  const fullDataUri = base64Data.startsWith('data:') ? base64Data : `data:${mimeType || 'image/jpeg'};base64,${base64Data}`;
 
   try {
     if (provider === 'gemini') {
       const cleanModel = model.replace(/^models\//, '');
+      const parts = [{ text: prompt }];
+
+      for (const img of imageList) {
+        const pure = img.data.includes(',') ? img.data.split(',')[1] : img.data;
+        parts.push({
+          inlineData: {
+            mimeType: img.mimeType || 'image/jpeg',
+            data: pure,
+          },
+        });
+      }
+
       const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: mimeType || 'image/jpeg', data: pureBase64 } }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: maxTokens || 2000 },
+          contents: [{ parts }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: maxTokens || 3000 },
         }),
       });
       const data = await gRes.json();
@@ -54,15 +76,27 @@ export default async function handler(req, res) {
     }
 
     if (provider === 'anthropic') {
+      const content = [];
+      for (const img of imageList) {
+        const pure = img.data.includes(',') ? img.data.split(',')[1] : img.data;
+        content.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: img.mimeType || 'image/jpeg',
+            data: pure,
+          },
+        });
+      }
+      content.push({ type: 'text', text: prompt });
+
       const aRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
-          model, max_tokens: maxTokens || 2000,
-          messages: [{ role: 'user', content: [
-            { type: 'image', source: { type: 'base64', media_type: mimeType || 'image/jpeg', data: pureBase64 } },
-            { type: 'text', text: prompt },
-          ]}],
+          model,
+          max_tokens: maxTokens || 3000,
+          messages: [{ role: 'user', content }],
         }),
       });
       const data = await aRes.json();
@@ -75,16 +109,20 @@ export default async function handler(req, res) {
     if (provider === 'openrouter') baseUrl = 'https://openrouter.ai/api/v1';
     if (provider === 'deepinfra') baseUrl = 'https://api.deepinfra.com/v1/openai';
 
+    const content = [{ type: 'text', text: prompt }];
+    for (const img of imageList) {
+      const full = img.data.startsWith('data:') ? img.data : `data:${img.mimeType || 'image/jpeg'};base64,${img.data}`;
+      content.push({ type: 'image_url', image_url: { url: full, detail: 'high' } });
+    }
+
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: fullDataUri, detail: 'high' } },
-        ]}],
-        temperature: 0.2, max_tokens: maxTokens || 2000,
+        messages: [{ role: 'user', content }],
+        temperature: 0.1,
+        max_tokens: maxTokens || 3000,
       }),
     });
     const data = await response.json();

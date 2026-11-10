@@ -6,6 +6,7 @@ import {
   BellRing,
   CalendarClock,
   CheckCircle2,
+  FlaskConical,
   ClipboardList,
   History,
   Dumbbell,
@@ -37,11 +38,12 @@ import AddPastDoseModal, { type PastDosePayload } from '../../components/AddPast
 import WeightLossInsights from '../../components/WeightLossInsights';
 import WaterTrackerCard from '../../components/WaterTrackerCard';
 import PenStockCard from '../../components/PenStockCard';
+import LabExamModal from '../../components/LabExamModal';
 import { useAuth } from '../../context/AuthContext';
 import { checkSuperAdmin, loadPatientData, savePatientData } from '../../lib/backend';
 import { ACTIVE_INGREDIENT_LABEL, findMedication } from '../../data/medications';
 import { activePhase, adherenceRate, ageFromBirth, cycleProgress, doseAtDate, doseStatus, fmtDateLong, fmtDateMedium, fmtMg, imcInfo, nextDoseDate, nextPhase, relativeDays, sortedPhases, treatmentWeek, upcomingDates, WEEKDAY_NAMES } from '../../lib/schedule';
-import type { DoseLog, InjectionSite, PatientData, PenStock, Treatment } from '../../lib/types';
+import type { DoseLog, InjectionSite, LabExam, PatientData, PenStock, Treatment } from '../../lib/types';
 import { INJECTION_SITE_LABELS } from '../../lib/types';
 import { generateMedicationGuidance } from '../../lib/llm';
 import { cn } from '../../utils/cn';
@@ -461,6 +463,14 @@ export default function Dashboard() {
   const [justApplied, setJustApplied] = useState(false);
   const [siteModalOpen, setSiteModalOpen] = useState(false);
     const [pastDoseModalOpen, setPastDoseModalOpen] = useState(false);
+  const [labModalOpen, setLabModalOpen] = useState(false);
+
+  function handleSaveLabExams(updatedExams: LabExam[]) {
+    update((prev) => ({
+      ...prev,
+      labExams: updatedExams,
+    }));
+  }
   const [aiGuidanceBusy, setAiGuidanceBusy] = useState(false);
 
   async function handleRegenerateAiGuidance() {
@@ -714,6 +724,15 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
 
           {/* Lado Direito: Ações rápidas e Perfil */}
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setLabModalOpen(true)}
+              title="Exames laboratoriais — subir laudo com IA ou registrar"
+              className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-[11px] font-extrabold text-teal-700 shadow-xs transition hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300 sm:px-3"
+            >
+              <span>🧪</span> <span className="hidden xl:inline">Exames</span>
+            </button>
+
             <Link
               to="/relatorio-consulta"
               title="Gerar relatório impresso / PDF para consulta médica"
@@ -1323,6 +1342,41 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                   />
                 </div>
 
+                {/* Card de Exames Laboratoriais com Leitura por IA */}
+                <div className="rounded-3xl border border-teal-200/80 bg-gradient-to-r from-teal-50/70 via-white to-emerald-50/40 p-5 shadow-sm dark:border-teal-900/60 dark:bg-gradient-to-r dark:from-teal-950/25 dark:via-slate-900 dark:to-teal-950/25 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5">
+                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-teal-600 text-white shadow-md shadow-teal-600/30">
+                        <FlaskConical className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                            Exames Laboratoriais
+                          </h3>
+                          <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-extrabold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                            {data?.labExams?.length ? `${data.labExams.length} exame(s)` : 'Subir laudo'}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                          {data?.labExams?.length
+                            ? `Última coleta em ${new Date(data.labExams[0].date + 'T12:00:00').toLocaleDateString('pt-BR')}. Tire foto do laudo novo ou adicione resultados!`
+                            : 'Envie fotos de cada página do laudo ou PDF: a Inteligência Artificial lê e preenche todos os seus exames automaticamente.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        type="button"
+                        onClick={() => setLabModalOpen(true)}
+                        className="!py-2 !px-4 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-600/20"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" /> Enviar Laudo / Ver Exames
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
                 <SymptomLog data={data!} update={update} />
 
                 <DisclaimerBox compact />
@@ -1404,6 +1458,14 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
         availableDoses={med?.doses}
         medBrand={med?.brand}
         currentPenStock={data?.penStock}
+      />
+
+      {/* Modal de Exames Laboratoriais com Leitura por IA */}
+      <LabExamModal
+        isOpen={labModalOpen}
+        onClose={() => setLabModalOpen(false)}
+        exams={data?.labExams ?? []}
+        onSaveExams={handleSaveLabExams}
       />
 
       </div>

@@ -9,10 +9,13 @@ import {
   Check,
   ClipboardList,
   Dumbbell,
+  FileText,
+  FlaskConical,
   HeartPulse,
   KeyRound,
   LoaderCircle,
   LogOut,
+  Plus,
   Save,
   Scale,
   Search,
@@ -27,6 +30,8 @@ import {
 } from 'lucide-react';
 import { Avatar, Badge, Button, Card, DisclaimerBox, Field, Logo, SectionTitle, TextInput } from '../../components/ui';
 import ThemeSwitcher from '../../components/ThemeSwitcher';
+import MedicalReport from '../MedicalReport';
+import LabExamModal from '../../components/LabExamModal';
 import { useAuth } from '../../context/AuthContext';
 import { loadPatientData, savePatientData } from '../../lib/backend';
 import { listLinksForProfessional, requestPatientLink } from '../../lib/professional';
@@ -63,6 +68,8 @@ export default function ProfessionalPortal() {
   const [links, setLinks] = useState<PatientLink[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [patientData, setPatientData] = useState<PatientData | null>(null);
+  const [viewingReport, setViewingReport] = useState(false);
+  const [labModalOpen, setLabModalOpen] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -179,22 +186,62 @@ export default function ProfessionalPortal() {
           />
         ) : (
           <div>
-            <button
-              onClick={() => setSelectedPatientId(null)}
-              className="mb-5 inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> Voltar para meus pacientes
-            </button>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <button
+                onClick={() => {
+                  if (viewingReport) setViewingReport(false);
+                  else setSelectedPatientId(null);
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> {viewingReport ? 'Voltar à visão clínica do paciente' : 'Voltar para meus pacientes'}
+              </button>
+
+              <Button
+                variant={viewingReport ? 'secondary' : 'primary'}
+                onClick={() => setViewingReport((v) => !v)}
+                className="!py-1.5 !px-3 text-xs font-bold"
+              >
+                <FileText className="h-4 w-4" />
+                {viewingReport ? 'Voltar ao Painel do Profissional' : 'Ver Relatório Clínico Completo (Impressão / PDF)'}
+              </Button>
+            </div>
+
             {!patientData ? (
               <div className="grid place-items-center py-20">
                 <div className="h-9 w-9 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
               </div>
+            ) : viewingReport ? (
+              <MedicalReport
+                customData={patientData}
+                customPatientId={selectedPatientId}
+                onBack={() => setViewingReport(false)}
+                onUpdateData={(newData) => setPatientData(newData)}
+              />
             ) : professional.role === 'medico' ? (
-              <MedicoView data={patientData} professionalName={account!.profile.name} update={updatePatient} />
+              <MedicoView
+                data={patientData}
+                professionalName={account!.profile.name}
+                update={updatePatient}
+                onOpenReport={() => setViewingReport(true)}
+                onOpenLabModal={() => setLabModalOpen(true)}
+              />
             ) : professional.role === 'nutricionista' ? (
               <NutricionistaView data={patientData} professionalName={account!.profile.name} update={updatePatient} />
             ) : (
               <PersonalView data={patientData} patientId={selectedPatientId} professionalName={account!.profile.name} update={updatePatient} />
+            )}
+
+            {/* Modal de Exames Laboratoriais no Portal */}
+            {patientData && selectedPatientId && (
+              <LabExamModal
+                isOpen={labModalOpen}
+                onClose={() => setLabModalOpen(false)}
+                exams={patientData.labExams ?? []}
+                onSaveExams={(updated) => {
+                  updatePatient((prev) => ({ ...prev, labExams: updated }));
+                }}
+              />
             )}
           </div>
         )}
@@ -407,7 +454,19 @@ function NoteEditor({
 
 /* ================= Visão do Médico ================= */
 
-function MedicoView({ data, professionalName, update }: { data: PatientData; professionalName: string; update: (u: (p: PatientData) => PatientData) => void }) {
+function MedicoView({
+  data,
+  professionalName,
+  update,
+  onOpenReport,
+  onOpenLabModal,
+}: {
+  data: PatientData;
+  professionalName: string;
+  update: (u: (p: PatientData) => PatientData) => void;
+  onOpenReport: () => void;
+  onOpenLabModal: () => void;
+}) {
   const t = data.treatment;
   const med = t ? findMedication(t.medId) : undefined;
   const phase = t ? activePhase(t) : null;
@@ -421,6 +480,26 @@ function MedicoView({ data, professionalName, update }: { data: PatientData; pro
   return (
     <div className="space-y-5">
       <PatientHeader data={data} />
+
+      {/* Banner de Acesso Rápido ao Relatório Clínico Completo */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 to-teal-50/70 p-4 shadow-xs dark:border-brand-800/60 dark:from-brand-950/40 dark:to-teal-950/30">
+        <div className="flex items-center gap-3">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-600 text-white shadow-md shadow-brand-600/30">
+            <FileText className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+              Prontuário & Relatório Clínico Completo
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Visualize todas as doses aplicadas, histórico laboratorial completo, hidratação e gere PDF impresso para o prontuário.
+            </p>
+          </div>
+        </div>
+        <Button onClick={onOpenReport} className="shrink-0 !py-2 !px-4 text-xs font-extrabold bg-brand-600 hover:bg-brand-700 text-white shadow-md shadow-brand-600/20">
+          <FileText className="h-4 w-4" /> Abrir Relatório Clínico
+        </Button>
+      </div>
 
       {severeCount > 0 && (
         <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-200">
@@ -469,6 +548,83 @@ function MedicoView({ data, professionalName, update }: { data: PatientData; pro
           )}
         </Card>
       </div>
+
+      {/* Exames Laboratoriais do Paciente */}
+      <Card className="p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <SectionTitle
+            icon={<FlaskConical className="h-4 w-4 text-teal-600" />}
+            title="Exames laboratoriais do paciente"
+            subtitle={`${(data.labExams ?? []).length} registro(s) no prontuário`}
+          />
+          <Button
+            onClick={onOpenLabModal}
+            className="!py-1.5 !px-3 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs"
+          >
+            <Plus className="h-3.5 w-3.5" /> Adicionar / Gerenciar Exames
+          </Button>
+        </div>
+
+        {(!data.labExams || data.labExams.length === 0) ? (
+          <p className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400 dark:border-slate-700">
+            Nenhum exame laboratorial registrado para este paciente ainda.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {data.labExams.slice(0, 3).map((ex) => {
+              const homa = ex.fastingGlucoseMgDl && ex.insulinUuMl
+                ? Math.round(((ex.fastingGlucoseMgDl * ex.insulinUuMl) / 405) * 100) / 100
+                : null;
+              return (
+                <div key={ex.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 text-xs dark:border-slate-800 dark:bg-slate-800/60">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2 dark:border-slate-700/60">
+                    <span className="font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                      <FlaskConical className="h-3.5 w-3.5 text-teal-600" /> Coleta: {new Date(ex.date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                    </span>
+                    {homa !== null && (
+                      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full", homa <= 2.7 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")}>
+                        HOMA-IR: {homa} ({homa <= 2.7 ? 'Normal' : 'Resist. Insulínica'})
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {ex.fastingGlucoseMgDl != null && (
+                      <div className="rounded-lg bg-white p-2 dark:bg-slate-700/50">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Glicose</span>
+                        <strong className="text-slate-800 dark:text-slate-100">{ex.fastingGlucoseMgDl} mg/dL</strong>
+                      </div>
+                    )}
+                    {ex.hba1cPercent != null && (
+                      <div className="rounded-lg bg-white p-2 dark:bg-slate-700/50">
+                        <span className="text-[10px] text-slate-400 block font-semibold">HbA1c</span>
+                        <strong className="text-slate-800 dark:text-slate-100">{ex.hba1cPercent}%</strong>
+                      </div>
+                    )}
+                    {ex.creatinineMgDl != null && (
+                      <div className="rounded-lg bg-white p-2 dark:bg-slate-700/50">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Creatinina</span>
+                        <strong className="text-slate-800 dark:text-slate-100">{ex.creatinineMgDl} mg/dL</strong>
+                      </div>
+                    )}
+                    {ex.tshUiuMl != null && (
+                      <div className="rounded-lg bg-white p-2 dark:bg-slate-700/50">
+                        <span className="text-[10px] text-slate-400 block font-semibold">TSH</span>
+                        <strong className="text-slate-800 dark:text-slate-100">{ex.tshUiuMl} µUI/mL</strong>
+                      </div>
+                    )}
+                  </div>
+                  {ex.otherResults && (
+                    <div className="mt-2 rounded-lg border border-teal-100 bg-white p-2.5 text-[11px] text-slate-700 dark:border-teal-900 dark:bg-slate-700/50 dark:text-slate-300">
+                      <span className="font-bold text-teal-700 dark:text-teal-300 block mb-0.5">Outros exames (Hemograma, PCR, etc.):</span>
+                      <p className="whitespace-pre-line font-mono">{ex.otherResults}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
 
       <Card className="p-6">
         <SectionTitle icon={<ClipboardList className="h-4 w-4 text-brand-600" />} title="Diário de sintomas do paciente" subtitle="registrado pelo próprio paciente" />

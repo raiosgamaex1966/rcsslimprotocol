@@ -183,6 +183,7 @@ export interface LabExam {
   vitaminDNgMl?: number; // Vitamina D 25-OH (ng/mL)
   vitaminB12PgMl?: number; // Vitamina B12 (pg/mL)
   ferritinNgMl?: number; // Ferritina (ng/mL)
+  otherResults?: string; // Outros exames do laudo (Hemograma, PCR, Cortisol, etc.)
   // Exames de Imagem & Notas
   ultrasoundNotes?: string; // Ultrassonografia de Abdômen (laudo)
   notes?: string;

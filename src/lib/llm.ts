@@ -1,6 +1,6 @@
 import { food, scaledPortion, type FoodItem } from '../data/foods';
 import { findMedication } from '../data/medications';
-import type { DoseLog, Profile, Treatment } from './types';
+import type { DoseLog, LabExam, Profile, Treatment } from './types';
 import { ageFromBirth, doseAtDate, treatmentWeek, WEEKDAY_NAMES } from './schedule';
 
 /* ============================================================
@@ -369,6 +369,16 @@ export async function requestLLM(_cfg: LLMConfig, prompt: string, maxTokens: num
 }
 
 /** Executa chamada multimodal para envio de imagem (foto de receita médica). */
+
+/** Executa chamada multimodal para envio de uma ou mais imagens (fotos de receitas ou páginas de laudos). */
+export async function requestLLMVisionMultiple(_cfg: LLMConfig, prompt: string, images: Array<{ data: string; mimeType: string }>, maxTokens: number = 3000): Promise<string> {
+  const url = '/api/vision';
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, images, maxTokens }) });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error ?? `Erro HTTP ${res.status}`);
+  return data?.text ?? '';
+}
+
 export async function requestLLMVision(_cfg: LLMConfig, prompt: string, base64Data: string, mimeType: string = 'image/jpeg', maxTokens: number = 2000): Promise<string> {
   const url = '/api/vision';
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, base64Data, mimeType, maxTokens }) });
@@ -868,3 +878,171 @@ ATENÇÃO: NUNCA use placeholders entre colchetes como '[Seu Nome]' ou '[Nome do
 }
 
 export type { FoodItem };
+
+export interface ExtractedLabExamResult {
+  success: boolean;
+  data?: Partial<LabExam>;
+  rawText?: string;
+  error?: string;
+}
+
+export async function extractLabExamFromImages(
+  images: Array<{ data: string; mimeType: string }>
+): Promise<ExtractedLabExamResult> {
+  let cfg = getLLMConfig();
+  if (!cfg?.apiKey) {
+    cfg = await syncLLMConfigFromServer();
+  }
+  if (!cfg || !cfg.apiKey) {
+    return {
+      success: false,
+      error: 'Inteligência Artificial não configurada ou desativada no sistema.',
+    };
+  }
+
+  const prompt = `Você é um médico endocrinologista e patologista clínico especialista em análise e transcrição de laudos laboratoriais.
+Analise a(s) imagem(ns) do exame laboratorial / sangue enviado e extraia com alta precisão os valores encontrados.
+
+Diretrizes obrigatórias:
+1. Extraia a data de coleta/realização do exame (formato AAAA-MM-DD, ex: "2026-05-20"). Se não constar, use a data de hoje.
+2. Extraia apenas números (decimais separados por ponto) para os seguintes parâmetros padronizados:
+   - fastingGlucoseMgDl: Glicemia de jejum em mg/dL
+   - hba1cPercent: Hemoglobina glicada HbA1c em %
+   - insulinUuMl: Insulina basal em µUI/mL
+   - totalCholesterolMgDl: Colesterol total em mg/dL
+   - ldlCholesterolMgDl: Colesterol LDL em mg/dL
+   - hdlCholesterolMgDl: Colesterol HDL em mg/dL
+   - triglyceridesMgDl: Triglicerídeos em mg/dL
+   - tgoUl: TGO / AST em U/L
+   - tgpUl: TGP / ALT em U/L
+   - gamaGtUl: Gama-GT em U/L
+   - alkalinePhosphataseUl: Fosfatase alcalina em U/L
+   - totalBilirubinMgDl: Bilirrubina total em mg/dL
+   - amylaseUl: Amilase em U/L
+   - lipaseUl: Lipase em U/L
+   - creatinineMgDl: Creatinina sérica em mg/dL
+   - ureaMgDl: Ureia sérica em mg/dL
+   - sodiumMEqL: Sódio em mEq/L
+   - potassiumMEqL: Potássio em mEq/L
+   - tshUiuMl: TSH em µUI/mL
+   - t4FreeNgDl: T4 Livre em ng/dL
+   - calcitoninPgMl: Calcitonina sérica em pg/mL
+   - albuminGDl: Albumina em g/dL
+   - uricAcidMgDl: Ácido úrico em mg/dL
+   - vitaminDNgMl: Vitamina D 25-OH em ng/mL
+   - vitaminB12PgMl: Vitamina B12 em pg/mL
+   - ferritinNgMl: Ferritina sérica em ng/mL
+
+3. OUTROS EXAMES DO LAUDO (MUITO IMPORTANTE):
+   Para QUALQUER exame presente nas páginas do laudo que NÃO pertença aos campos específicos acima (por exemplo:
+   - Hemograma completo detalhado (Hemácias, Hemoglobina, Hematócrito, Leucócitos totais, Bastonetes, Segmentados, Linfócitos, Plaquetas)
+   - Proteína C-Reativa (PCR) ou VHS
+   - Cortisol sérico
+   - Cálcio iônico/total, Magnésio, Fósforo, Zinco
+   - Ferro sérico, Capacidade total de fixação, Transferrina
+   - Urina tipo 1 (EAS / leucócitos / hemácias / proteínas na urina)
+   - Outros hormônios ou anticorpos):
+   Agrupe-os e transcreva-os de forma clara, legível e organizada no campo "otherResults", linha a linha com nome do exame, resultado numérico e unidade de medida.
+
+4. Se houver ultrassonografia de abdômen / vias biliares / fígado, coloque o laudo resumido em "ultrasoundNotes".
+5. Se houver observações ou alertas gerais do laboratório, coloque em "notes".
+
+Responda ESTRITAMENTE em formato JSON puro (sem marcações markdown adicionais fora do JSON):
+{
+  "date": "2026-05-15",
+  "fastingGlucoseMgDl": 92,
+  "hba1cPercent": 5.4,
+  "insulinUuMl": 8.0,
+  "totalCholesterolMgDl": 182,
+  "ldlCholesterolMgDl": 102,
+  "hdlCholesterolMgDl": 52,
+  "triglyceridesMgDl": 138,
+  "tgoUl": 22,
+  "tgpUl": 25,
+  "gamaGtUl": 26,
+  "alkalinePhosphataseUl": 64,
+  "totalBilirubinMgDl": 0.8,
+  "amylaseUl": 54,
+  "lipaseUl": 31,
+  "creatinineMgDl": 0.9,
+  "ureaMgDl": 30,
+  "sodiumMEqL": 140,
+  "potassiumMEqL": 4.2,
+  "tshUiuMl": 2.1,
+  "t4FreeNgDl": 1.2,
+  "calcitoninPgMl": 2.5,
+  "albuminGDl": 4.5,
+  "uricAcidMgDl": 5.0,
+  "vitaminDNgMl": 38,
+  "vitaminB12PgMl": 510,
+  "ferritinNgMl": 115,
+  "otherResults": "• Hemograma: Hemoglobina 14.2 g/dL, Hematócrito 42%, Leucócitos 6.400 /mm³, Plaquetas 245.000 /mm³\n• PCR: 0.5 mg/L\n• Magnésio: 2.1 mg/dL",
+  "ultrasoundNotes": "",
+  "notes": ""
+}`;
+
+  try {
+    const raw = await requestLLMVisionMultiple(cfg, prompt, images, 3000);
+    const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1) {
+      return {
+        success: false,
+        rawText: raw,
+        error: 'A IA não conseguiu interpretar o laudo em formato estruturado.',
+      };
+    }
+
+    const parsed = JSON.parse(cleaned.slice(start, end + 1));
+    const parseNum = (v: any) => {
+      if (v == null) return undefined;
+      const n = Number(String(v).replace(',', '.'));
+      return isNaN(n) ? undefined : n;
+    };
+
+    const examData: Partial<LabExam> = {
+      date: typeof parsed.date === 'string' && parsed.date.length >= 8 ? parsed.date : new Date().toISOString().slice(0, 10),
+      fastingGlucoseMgDl: parseNum(parsed.fastingGlucoseMgDl),
+      hba1cPercent: parseNum(parsed.hba1cPercent),
+      insulinUuMl: parseNum(parsed.insulinUuMl),
+      totalCholesterolMgDl: parseNum(parsed.totalCholesterolMgDl),
+      ldlCholesterolMgDl: parseNum(parsed.ldlCholesterolMgDl),
+      hdlCholesterolMgDl: parseNum(parsed.hdlCholesterolMgDl),
+      triglyceridesMgDl: parseNum(parsed.triglyceridesMgDl),
+      tgoUl: parseNum(parsed.tgoUl),
+      tgpUl: parseNum(parsed.tgpUl),
+      gamaGtUl: parseNum(parsed.gamaGtUl),
+      alkalinePhosphataseUl: parseNum(parsed.alkalinePhosphataseUl),
+      totalBilirubinMgDl: parseNum(parsed.totalBilirubinMgDl),
+      amylaseUl: parseNum(parsed.amylaseUl),
+      lipaseUl: parseNum(parsed.lipaseUl),
+      creatinineMgDl: parseNum(parsed.creatinineMgDl),
+      ureaMgDl: parseNum(parsed.ureaMgDl),
+      sodiumMEqL: parseNum(parsed.sodiumMEqL),
+      potassiumMEqL: parseNum(parsed.potassiumMEqL),
+      tshUiuMl: parseNum(parsed.tshUiuMl),
+      t4FreeNgDl: parseNum(parsed.t4FreeNgDl),
+      calcitoninPgMl: parseNum(parsed.calcitoninPgMl),
+      albuminGDl: parseNum(parsed.albuminGDl),
+      uricAcidMgDl: parseNum(parsed.uricAcidMgDl),
+      vitaminDNgMl: parseNum(parsed.vitaminDNgMl),
+      vitaminB12PgMl: parseNum(parsed.vitaminB12PgMl),
+      ferritinNgMl: parseNum(parsed.ferritinNgMl),
+      otherResults: parsed.otherResults ? String(parsed.otherResults).trim() : undefined,
+      ultrasoundNotes: parsed.ultrasoundNotes ? String(parsed.ultrasoundNotes).trim() : undefined,
+      notes: parsed.notes ? String(parsed.notes).trim() : undefined,
+    };
+
+    return {
+      success: true,
+      data: examData,
+      rawText: raw,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message || 'Erro ao processar as imagens do laudo com IA.',
+    };
+  }
+}

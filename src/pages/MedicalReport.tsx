@@ -18,20 +18,39 @@ import { INJECTION_SITE_LABELS } from '../lib/types';
 import { cn } from '../utils/cn';
 import LabExamModal from '../components/LabExamModal';
 
-export default function MedicalReport() {
+export interface MedicalReportProps {
+  customData?: PatientData;
+  customPatientId?: string;
+  onBack?: () => void;
+  onUpdateData?: (newData: PatientData) => void;
+}
+
+export default function MedicalReport({
+  customData,
+  customPatientId,
+  onBack,
+  onUpdateData,
+}: MedicalReportProps = {}) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [data, setData] = useState<PatientData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<PatientData | null>(customData ?? null);
+  const [loading, setLoading] = useState(!customData);
   const [examModalOpen, setExamModalOpen] = useState(false);
 
+  const targetUserId = customPatientId || user?.id;
+
   useEffect(() => {
-    if (!user?.id) return;
-    loadPatientData(user.id).then((d) => {
+    if (customData) {
+      setData(customData);
+      setLoading(false);
+      return;
+    }
+    if (!targetUserId) return;
+    loadPatientData(targetUserId).then((d) => {
       setData(d);
       setLoading(false);
     });
-  }, [user?.id]);
+  }, [customData, targetUserId]);
 
   if (loading) {
     return (
@@ -78,13 +97,14 @@ export default function MedicalReport() {
   }
 
   async function handleSaveExams(updatedExams: LabExam[]) {
-    if (!user?.id || !data) return;
+    if (!targetUserId || !data) return;
     const nextData: PatientData = {
       ...data,
       labExams: updatedExams,
     };
     setData(nextData);
-    await savePatientData(user.id, nextData);
+    if (onUpdateData) onUpdateData(nextData);
+    await savePatientData(targetUserId, nextData);
   }
 
   return (
@@ -92,10 +112,10 @@ export default function MedicalReport() {
       {/* Botões de Ação no Topo (ocultos na impressão) */}
       <div className="mx-auto max-w-3xl mb-4 sm:mb-6 flex items-center justify-between gap-2 print:hidden">
         <button
-          onClick={() => navigate('/app')}
+          onClick={() => (onBack ? onBack() : navigate('/app'))}
           className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
         >
-          <ArrowLeft className="h-4 w-4" /> Voltar ao Painel
+          <ArrowLeft className="h-4 w-4" /> {onBack ? 'Voltar ao Painel do Profissional' : 'Voltar ao Painel'}
         </button>
 
         <div className="flex items-center gap-2">
@@ -361,6 +381,13 @@ export default function MedicalReport() {
                         </div>
                       )}
                     </div>
+
+                    {ex.otherResults && (
+                      <div className="mt-2.5 rounded-xl border border-teal-200 bg-white p-3 text-xs text-slate-800 dark:border-teal-900/60 dark:bg-slate-800 dark:text-slate-200">
+                        <strong className="text-teal-800 dark:text-teal-300 block mb-1">Outros Exames do Laudo (Hemograma, PCR, etc.):</strong>
+                        <p className="whitespace-pre-line font-mono text-[11px] leading-relaxed">{ex.otherResults}</p>
+                      </div>
+                    )}
 
                     {ex.ultrasoundNotes && (
                       <div className="mt-2.5 rounded-xl border border-teal-200 bg-white p-2.5 text-xs text-teal-950 dark:border-teal-900/60 dark:bg-slate-800 dark:text-teal-200">
