@@ -55,11 +55,20 @@ export interface PatientLink {
   respondedAt?: string;
 }
 
+export interface ClinicalRecommendation {
+  id: string;
+  role: 'medico' | 'nutricionista' | 'personal';
+  authorName: string;
+  text: string;
+  date: string; // ISO string
+}
+
 /** Notas clínicas/profissionais deixadas para o paciente, por escopo. */
 export interface ProfessionalNotes {
   medico?: { text: string; authorName: string; updatedAt: string };
   nutricionista?: { text: string; authorName: string; updatedAt: string };
   personal?: { text: string; authorName: string; updatedAt: string };
+  history?: ClinicalRecommendation[];
 }
 
 /** Ajustes manuais e dieta prescrita pelo nutricionista. */
@@ -283,6 +292,7 @@ export interface PatientData {
   workoutLogs?: WorkoutLog[];
   symptomLogs?: SymptomLog[];
   professionalNotes?: ProfessionalNotes;
+  recommendationHistory?: ClinicalRecommendation[];
   nutritionOverride?: NutritionOverride;
   workoutOverride?: WorkoutPlanLike;
   savedMedicationIds?: string[]; // IDs de medicamentos salvos para consultas posteriores

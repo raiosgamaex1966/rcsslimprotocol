@@ -509,6 +509,35 @@ export default function MedicalReport({
           )}
         </div>
 
+        {/* Orientações & Condutas Médicas */}
+        {((data?.recommendationHistory && data.recommendationHistory.length > 0) || data?.professionalNotes?.medico?.text) && (
+          <div className="mt-6">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              Condutas e Orientações Médicas Registradas
+            </h3>
+            <div className="mt-2 space-y-2">
+              {(data.recommendationHistory && data.recommendationHistory.length > 0
+                ? data.recommendationHistory
+                : [{
+                    id: 'current',
+                    role: 'medico' as const,
+                    authorName: data?.professionalNotes?.medico?.authorName || 'Médico Assistente',
+                    text: data?.professionalNotes?.medico?.text || '',
+                    date: data?.professionalNotes?.medico?.updatedAt || new Date().toISOString(),
+                  }]
+              ).map((rec) => (
+                <div key={rec.id} className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-xs dark:border-blue-900/60 dark:bg-blue-950/20">
+                  <div className="flex items-center justify-between border-b border-blue-100 pb-1.5 dark:border-blue-900/40">
+                    <span className="font-extrabold text-blue-950 dark:text-blue-200">{rec.authorName}</span>
+                    <span className="text-[10px] text-slate-500 font-semibold">{new Date(rec.date).toLocaleDateString('pt-BR')}</span>
+                  </div>
+                  <p className="mt-1.5 whitespace-pre-line text-slate-800 dark:text-slate-200 leading-relaxed font-medium">{rec.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Rodapé / Aviso Legal */}
         <div className="mt-8 border-t border-slate-200 pt-4 text-[10px] text-slate-400 dark:border-slate-800">
           <p>

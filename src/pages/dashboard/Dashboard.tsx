@@ -20,6 +20,7 @@ import {
   Scale,
   ShieldCheck,
   Sparkles,
+  Stethoscope,
   Syringe,
   Target,
   Trash2,
@@ -1314,11 +1315,40 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                 </div>
 
                 {data?.professionalNotes?.medico && (
-                  <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-300">
-                      Observação do seu médico · {new Date(data.professionalNotes.medico.updatedAt).toLocaleDateString('pt-BR')}
+                  <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/40 p-4 dark:border-blue-800 dark:bg-gradient-to-r dark:from-blue-950/60 dark:to-slate-900 shadow-xs">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                        <Stethoscope className="h-3.5 w-3.5" /> Orientação do seu médico · {new Date(data.professionalNotes.medico.updatedAt).toLocaleDateString('pt-BR')}
+                      </p>
+                      {data.professionalNotes.medico.authorName && (
+                        <span className="text-[10px] font-extrabold text-blue-900 dark:text-blue-200">
+                          {data.professionalNotes.medico.authorName}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2 text-xs leading-relaxed text-blue-950 dark:text-blue-100 font-medium whitespace-pre-line">
+                      "{data.professionalNotes.medico.text}"
                     </p>
-                    <p className="mt-1 text-xs leading-relaxed text-blue-900 dark:text-blue-100">{data.professionalNotes.medico.text}</p>
+
+                    {/* Histórico anterior se houver mais de 1 orientação */}
+                    {data.recommendationHistory && data.recommendationHistory.length > 1 && (
+                      <details className="mt-3 border-t border-blue-200/60 pt-2 dark:border-blue-900/60 text-xs">
+                        <summary className="cursor-pointer font-bold text-blue-700 hover:underline dark:text-blue-300 text-[11px]">
+                          Ver orientações anteriores ({data.recommendationHistory.length - 1})
+                        </summary>
+                        <div className="mt-2 space-y-2">
+                          {data.recommendationHistory.slice(1).map((item) => (
+                            <div key={item.id} className="rounded-xl border border-blue-100 bg-white/70 p-2.5 text-[11px] dark:border-blue-900/40 dark:bg-slate-800/60">
+                              <div className="flex items-center justify-between text-slate-400 text-[10px] pb-1 border-b border-slate-100 dark:border-slate-700">
+                                <span className="font-bold text-slate-700 dark:text-slate-300">{item.authorName}</span>
+                                <span>{new Date(item.date).toLocaleDateString('pt-BR')}</span>
+                              </div>
+                              <p className="mt-1 text-slate-700 dark:text-slate-300 whitespace-pre-line">{item.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 )}
 

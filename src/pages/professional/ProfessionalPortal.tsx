@@ -12,6 +12,7 @@ import {
   FileText,
   FlaskConical,
   HeartPulse,
+  History,
   KeyRound,
   LoaderCircle,
   LogOut,
@@ -58,7 +59,7 @@ import {
   weeklyWeightTrend,
 } from '../../lib/schedule';
 import { computeTargets } from '../../lib/llm';
-import type { PatientData, PatientLink } from '../../lib/types';
+import type { ClinicalRecommendation, PatientData, PatientLink } from '../../lib/types';
 import { cn } from '../../utils/cn';
 
 export default function ProfessionalPortal() {
