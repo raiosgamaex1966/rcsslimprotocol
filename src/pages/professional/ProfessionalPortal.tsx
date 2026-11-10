@@ -416,39 +416,110 @@ function NoteEditor({
   title,
   icon,
   value,
+  history = [],
+  role = 'medico',
   authorName,
   onSave,
 }: {
   title: string;
   icon: React.ReactNode;
   value?: { text: string; authorName: string; updatedAt: string };
+  history?: ClinicalRecommendation[];
+  role?: 'medico' | 'nutricionista' | 'personal';
   authorName: string;
   onSave: (text: string) => void;
 }) {
   const [text, setText] = useState(value?.text ?? '');
   const [saved, setSaved] = useState(false);
+
+  // Histórico de recomendações (filtrando pelo papel ou consolidando)
+  const roleHistory = (history ?? []).filter((h) => h.role === role);
+  // Se ainda não tinha lista no histórico mas já existe um valor salvo anteriormente, sintetiza para exibição:
+  const displayHistory: ClinicalRecommendation[] = roleHistory.length > 0
+    ? roleHistory
+    : value?.text
+      ? [{ id: 'current', role, authorName: value.authorName || authorName, text: value.text, date: value.updatedAt }]
+      : [];
+
   return (
     <Card className="p-6">
-      <SectionTitle icon={icon} title={title} subtitle={value ? `Última atualização: ${new Date(value.updatedAt).toLocaleString('pt-BR')}` : 'Visível apenas para o paciente'} />
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={4}
-        placeholder="Escreva uma observação ou orientação para o paciente…"
-        className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+      <SectionTitle
+        icon={icon}
+        title={title}
+        subtitle={value ? `Última atualização: ${new Date(value.updatedAt).toLocaleString('pt-BR')}` : 'Orientações visíveis ao paciente'}
       />
-      <Button
-        className="mt-3 !px-4 !py-2 text-xs"
-        onClick={() => {
-          onSave(text);
-          setSaved(true);
-          window.setTimeout(() => setSaved(false), 2000);
-          void authorName;
-        }}
-      >
-        {saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
-        {saved ? 'Salvo!' : 'Salvar observação'}
-      </Button>
+
+      <div className="mt-3">
+        <label className="text-xs font-bold text-slate-700 dark:text-slate-200 block mb-1">
+          Nova orientação ou atualização de conduta:
+        </label>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={3}
+          placeholder="Escreva uma observação, recomendação médica ou conduta clínica..."
+          className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+        />
+      </div>
+
+      <div className="flex items-center justify-between mt-3">
+        <Button
+          className="!px-4 !py-2 text-xs font-bold"
+          onClick={() => {
+            if (!text.trim()) return;
+            onSave(text.trim());
+            setSaved(true);
+            window.setTimeout(() => setSaved(false), 2000);
+          }}
+        >
+          {saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
+          {saved ? 'Recomendação salva!' : 'Salvar observação'}
+        </Button>
+      </div>
+
+      {/* Histórico de Recomendações e Condutas */}
+      <div className="mt-6 border-t border-slate-200/80 pt-4 dark:border-slate-700">
+        <div className="flex items-center gap-2 mb-3">
+          <History className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+          <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+            Histórico de Recomendações e Condutas ({displayHistory.length})
+          </h4>
+        </div>
+
+        {displayHistory.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-200 p-3.5 text-center text-xs text-slate-400 dark:border-slate-700">
+            Nenhuma recomendação registrada ainda.
+          </p>
+        ) : (
+          <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+            {displayHistory.map((item, idx) => (
+              <div
+                key={item.id || idx}
+                className="rounded-xl border border-slate-200/90 bg-slate-50/80 p-3.5 text-xs dark:border-slate-700 dark:bg-slate-800"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-slate-200/60 pb-1.5 dark:border-slate-700/60">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold text-slate-900 dark:text-white">
+                      {item.authorName || authorName}
+                    </span>
+                    {idx === 0 && (
+                      <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[9px] font-extrabold text-brand-700 dark:bg-brand-950 dark:text-brand-300">
+                        Mais recente
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-semibold text-slate-400">
+                    {new Date(item.date).toLocaleString('pt-BR')}
+                  </span>
+                </div>
+                <p className="mt-2 text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line text-xs font-medium">
+                  {item.text}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
@@ -662,17 +733,35 @@ function MedicoView({
       </Card>
 
       <NoteEditor
-        title="Observação clínica"
+        title="Observação clínica & Conduta Médica"
         icon={<Stethoscope className="h-4 w-4 text-brand-600" />}
         value={data.professionalNotes?.medico}
+        history={data.recommendationHistory ?? data.professionalNotes?.history}
+        role="medico"
         authorName={professionalName}
-        onSave={(text) =>
-          update((prev) => ({
-            ...prev,
-            professionalNotes: { ...prev.professionalNotes, medico: { text, authorName: professionalName, updatedAt: new Date().toISOString() } },
-          }))
-        }
-      />
+        onSave={(text) => {
+          const now = new Date().toISOString();
+          const newEntry: ClinicalRecommendation = {
+            id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+            role: 'medico',
+            authorName: professionalName,
+            text,
+            date: now,
+          };
+          update((prev) => {
+            const curHist = prev.recommendationHistory ?? prev.professionalNotes?.history ?? [];
+            const nextHist = [newEntry, ...curHist.filter((h) => h.id !== newEntry.id)];
+            return {
+              ...prev,
+              recommendationHistory: nextHist,
+              professionalNotes: {
+                ...prev.professionalNotes,
+                medico: { text, authorName: professionalName, updatedAt: now },
+                history: nextHist,
+              },
+            };
+          });
+        }} />
       <DisclaimerBox compact />
     </div>
   );
