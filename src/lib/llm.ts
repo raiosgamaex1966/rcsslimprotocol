@@ -847,11 +847,21 @@ Instruções para a nota:
 2. Informe rapidamente o que pode acontecer nos próximos dias (foco nos efeitos gastrointestinais e retardo gástrico).
 3. Dê a instrução exata sobre fracionamento de água (doses suportáveis) para evitar constipação e náusea/empazinamento.
 4. Lembre sobre a obrigatoriedade de ingestão de proteínas e exercícios para não perder massa muscular (conforme o guia).
-5. Mostre o resumo das doses configuradas pelo paciente.`;
+5. Mostre o resumo das doses configuradas pelo paciente.
+6. Encerre com a assinatura:
+Um abraço,
+Equipe MinhaCaneta
+
+ATENÇÃO: NUNCA use placeholders entre colchetes como '[Seu Nome]' ou '[Nome do Médico]'. Assine estritamente como 'Equipe MinhaCaneta'.`;
 
   try {
     const raw = await requestLLM(cfg, prompt, 1500);
-    return raw;
+    const cleaned = raw
+      .replace(/\[Seu Nome\]/gi, 'Equipe MinhaCaneta')
+      .replace(/\[Nome do Médico\]/gi, 'Equipe MinhaCaneta')
+      .replace(/\[Nome do Profissional\]/gi, 'Equipe MinhaCaneta')
+      .replace(/\[Nome\]/gi, 'Equipe MinhaCaneta');
+    return cleaned;
   } catch (err: any) {
     return `Falha ao gerar nota da IA: ${err?.message}`;
   }
