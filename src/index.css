@@ -190,6 +190,18 @@ input[type="number"] {
     break-inside: auto !important;
   }
 
+  /* Forçar quebra de página calculada para folha A4 */
+  .print-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+    clear: both !important;
+    display: block !important;
+    height: 1px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    visibility: hidden !important;
+  }
+
   /* Evitar que cartões individuais ou linhas se quebrem feio na virada da página */
   .print-avoid-break,
   .print\:break-inside-avoid {

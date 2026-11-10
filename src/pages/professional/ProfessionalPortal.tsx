@@ -17,6 +17,7 @@ import {
   LoaderCircle,
   LogOut,
   Plus,
+  Printer,
   Save,
   Scale,
   Search,
@@ -150,6 +151,18 @@ export default function ProfessionalPortal() {
   const professional = effectiveProfessional!;
   const approved = links.filter((l) => l.status === 'aprovado');
   const pending = links.filter((l) => l.status === 'pendente');
+
+  // Visualização limpa em tela cheia do relatório para impressão
+  if (viewingReport && patientData && selectedPatientId) {
+    return (
+      <MedicalReport
+        customData={patientData}
+        customPatientId={selectedPatientId}
+        onBack={() => setViewingReport(false)}
+        onUpdateData={(newData) => setPatientData(newData)}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 print:min-h-0 print:h-auto print:bg-white print:overflow-visible">

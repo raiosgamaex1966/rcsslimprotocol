@@ -414,8 +414,30 @@ export default function MedicalReport({
           )}
         </div>
 
+        {/* Rodapé da Folha 1 (visível apenas na impressão) */}
+        <div className="hidden print:flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-200 pt-2.5 mt-5 print:break-inside-avoid">
+          <span>MinhaCaneta — Relatório para Consulta Clínica</span>
+          <span className="font-semibold">Paciente: {profile?.name ?? '—'} · Página 1 de 2</span>
+        </div>
+
+        {/* Quebra de Página Forçada e Calculada para a Folha 2 */}
+        <div className="print-page-break hidden print:block" style={{ pageBreakBefore: 'always', breakBefore: 'page' }} />
+
+        {/* Cabeçalho da Folha 2 (visível apenas na impressão) */}
+        <div className="hidden print:flex items-center justify-between border-b border-slate-200 pb-2 mb-4 pt-2 print:break-inside-avoid">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">💉</span>
+            <span className="font-extrabold text-xs text-slate-900">
+              MinhaCaneta — Relatório Clínico (Continuação)
+            </span>
+          </div>
+          <span className="text-[10px] text-slate-500 font-semibold">
+            {profile?.name ?? '—'} · Página 2 de 2
+          </span>
+        </div>
+
         {/* Histórico das Últimas Doses Aplicadas */}
-        <div className="mt-6 print:mt-4">
+        <div className="mt-6 print:mt-2">
           <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 print:text-slate-600 print:break-after-avoid">
             Histórico Completo de Doses Aplicadas ({logs.length} {logs.length === 1 ? 'aplicação' : 'aplicações'} no total)
           </h3>
@@ -543,11 +565,16 @@ export default function MedicalReport({
 
         {/* Rodapé / Aviso Legal */}
         <div className="mt-8 border-t border-slate-200 pt-4 text-[10px] text-slate-400 dark:border-slate-800 print:break-inside-avoid print:border-slate-300 print:text-slate-500">
-          <p>
-            * Este relatório é um documento informativo gerado pelo aplicativo MinhaCaneta a partir
-            dos dados inseridos pelo próprio paciente. Não substitui prontuário médico nem laudo
-            laboratorial.
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <p className="flex-1">
+              * Este relatório é um documento informativo gerado pelo aplicativo MinhaCaneta a partir
+              dos dados inseridos pelo próprio paciente. Não substitui prontuário médico nem laudo
+              laboratorial.
+            </p>
+            <span className="hidden print:inline-block font-bold text-slate-600 shrink-0 text-right">
+              Página 2 de 2
+            </span>
+          </div>
         </div>
       </div>
 
