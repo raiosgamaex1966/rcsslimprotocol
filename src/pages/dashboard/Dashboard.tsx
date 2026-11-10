@@ -11,6 +11,7 @@ import {
   Dumbbell,
   LayoutDashboard,
   LogOut,
+  LoaderCircle,
   Pencil,
   PackagePlus,
   Pill,
@@ -459,7 +460,35 @@ export default function Dashboard() {
   const [editingTarget, setEditingTarget] = useState(false);
   const [justApplied, setJustApplied] = useState(false);
   const [siteModalOpen, setSiteModalOpen] = useState(false);
-  const [pastDoseModalOpen, setPastDoseModalOpen] = useState(false);
+    const [pastDoseModalOpen, setPastDoseModalOpen] = useState(false);
+  const [aiGuidanceBusy, setAiGuidanceBusy] = useState(false);
+
+  async function handleRegenerateAiGuidance() {
+    if (!treatment || !data?.profile) return;
+    setAiGuidanceBusy(true);
+    try {
+      const note = await generateMedicationGuidance(treatment, data.profile, `
+1. O que é a semaglutida e como ela age no corpo?
+A semaglutida é uma molécula sintética que atua como um agonista dos receptores do hormônio GLP-1. Controle da fome: Aumenta a saciedade. Retardo gástrico: Diminui a velocidade do esvaziamento do estômago.
+3. Quais são os efeitos colaterais mais comuns?
+Náuseas, vômitos, diarreia e constipação (prisão de ventre), azia/refluxo.
+4. Existe risco de perda de massa muscular?
+Sim. Para mitigar, é obrigatório exercícios de resistência (musculação) e ingestão adequada de proteínas.
+Q5: Quais estratégias reduzem o impacto do retardo gástrico?
+Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das grandes refeições e fracionada.`);
+      update((prev) => {
+        if (!prev.treatment) return prev;
+        return {
+          ...prev,
+          treatment: { ...prev.treatment, aiGuidanceNote: note },
+        };
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setAiGuidanceBusy(false);
+    }
+  }
   
   // Rodízio de locais
   const lastSite = useMemo(() => {
@@ -992,16 +1021,38 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                     )}
                     
                     {/* Nota da IA */}
-                    {treatment.aiGuidanceNote && (
-                      <div className="relative mt-5 border-t border-white/10 pt-4">
+                    <div className="relative mt-5 border-t border-white/10 pt-4">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
                           <Sparkles className="h-3 w-3 text-brand-400" /> Nota da IA para o paciente
                         </p>
-                        <div className="mt-3 text-xs leading-relaxed text-slate-300 space-y-2 whitespace-pre-wrap">
-                          {treatment.aiGuidanceNote}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRegenerateAiGuidance}
+                          disabled={aiGuidanceBusy}
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-300 hover:text-brand-200 transition-colors"
+                        >
+                          {aiGuidanceBusy ? (
+                            <LoaderCircle className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3 w-3" />
+                          )}
+                          {treatment.aiGuidanceNote && !treatment.aiGuidanceNote.includes('Habilite a Inteligência')
+                            ? 'Atualizar recomendação'
+                            : 'Gerar recomendação com IA'}
+                        </button>
                       </div>
-                    )}
+                      <div className="mt-3 text-xs leading-relaxed text-slate-300 space-y-2 whitespace-pre-wrap">
+                        {aiGuidanceBusy ? (
+                          <div className="flex items-center gap-2 text-slate-400 italic py-2">
+                            <LoaderCircle className="h-3.5 w-3.5 animate-spin text-brand-400" />
+                            A Inteligência Artificial está formulando sua orientação clínica personalizada...
+                          </div>
+                        ) : (
+                          treatment.aiGuidanceNote || 'Toque em "Gerar recomendação com IA" para receber orientações clínicas sobre sua dose atual.'
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Coluna de estatísticas */}

@@ -809,7 +809,10 @@ Responda ESTRITAMENTE em formato JSON puro, sem formatações Markdown ou explic
 }
 
 export async function generateMedicationGuidance(treatment: Treatment, profile: Profile, guideText: string): Promise<string> {
-  const cfg = getLLMConfig();
+  let cfg = getLLMConfig();
+  if (!cfg || !cfg.enabled) {
+    cfg = await syncLLMConfigFromServer();
+  }
   if (!cfg || !cfg.enabled) {
     return "Nota: Habilite a Inteligência Artificial nas configurações para gerar recomendações personalizadas.";
   }

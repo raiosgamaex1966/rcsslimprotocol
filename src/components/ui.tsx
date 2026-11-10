@@ -12,10 +12,10 @@ export function Logo({ dark = false, size = 'md', hideSubtitleOnMobile = false }
         <Syringe className={size === 'lg' ? 'h-6 w-6' : 'h-4 w-4 sm:h-5 sm:w-5'} />
       </div>
       <div className="leading-tight">
-        <span className={cn('block font-extrabold tracking-tight', size === 'lg' ? 'text-lg sm:text-xl' : 'text-sm sm:text-base', dark ? 'text-white' : 'text-slate-900')}>
-          Minha<span className="text-brand-600">Caneta</span>
+        <span className={cn('block font-extrabold tracking-tight', size === 'lg' ? 'text-lg sm:text-xl' : 'text-sm sm:text-base', dark ? 'text-white' : 'text-slate-900 dark:text-white')}>
+          Minha<span className="text-brand-600 dark:text-brand-400">Caneta</span>
         </span>
-        <span className={cn('text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.14em]', hideSubtitleOnMobile ? 'hidden sm:block' : 'block', dark ? 'text-brand-200/80' : 'text-slate-400')}>
+        <span className={cn('text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.14em]', hideSubtitleOnMobile ? 'hidden sm:block' : 'block', dark ? 'text-brand-200/80' : 'text-slate-400 dark:text-slate-500')}>
           GLP-1 · acompanhamento
         </span>
       </div>
