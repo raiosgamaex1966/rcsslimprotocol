@@ -123,13 +123,35 @@ input[type="number"] {
 
 @media print {
   @page {
-    margin: 12mm 15mm;
+    margin: 10mm 12mm;
     size: A4 portrait;
+  }
+
+  /* CRÍTICO: Remover travas de altura fixa e overflow hidden para permitir paginação nativa em múltiplas folhas */
+  html,
+  body,
+  #root,
+  #root > div,
+  main,
+  div {
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    position: static !important;
   }
 
   body {
     background-color: #ffffff !important;
-    color: #000000 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
     padding: 0 !important;
     margin: 0 !important;
     -webkit-print-color-adjust: exact !important;
@@ -149,6 +171,8 @@ input[type="number"] {
     margin: 0 !important;
     max-width: 100% !important;
     width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
   }
 
   #medical-report-sheet {
@@ -158,6 +182,40 @@ input[type="number"] {
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
-    background: transparent !important;
+    background: #ffffff !important;
+    height: auto !important;
+    min-height: auto !important;
+    display: block !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  /* Evitar que cartões individuais ou linhas se quebrem feio na virada da página */
+  .print-avoid-break,
+  .print\:break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Ajuste de cores para impressão nítida mesmo se o usuário estiver com o tema escuro ativado */
+  .dark #medical-report-sheet,
+  .dark #medical-report-sheet * {
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    text-shadow: none !important;
+    box-shadow: none !important;
+  }
+
+  .dark #medical-report-sheet .bg-slate-50,
+  .dark #medical-report-sheet .bg-slate-800\/40,
+  .dark #medical-report-sheet .bg-slate-50\/50,
+  .dark #medical-report-sheet .bg-sky-50\/40,
+  .dark #medical-report-sheet .bg-amber-50\/40,
+  .dark #medical-report-sheet .bg-blue-50\/50,
+  .dark #medical-report-sheet .bg-slate-900\/60,
+  .dark #medical-report-sheet .bg-blue-950\/20,
+  .dark #medical-report-sheet .bg-sky-950\/20,
+  .dark #medical-report-sheet .bg-amber-950\/20 {
+    background-color: #f8fafc !important;
   }
 }

@@ -108,7 +108,7 @@ export default function MedicalReport({
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-3 sm:p-8 dark:bg-slate-950 print:min-h-0 print:bg-white print:p-0 print:m-0">
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-8 dark:bg-slate-950 print:min-h-0 print:h-auto print:bg-white print:p-0 print:m-0 print:overflow-visible">
       {/* Botões de Ação no Topo (ocultos na impressão) */}
       <div className="mx-auto max-w-3xl mb-4 sm:mb-6 flex items-center justify-between gap-2 print:hidden">
         <button
@@ -133,9 +133,9 @@ export default function MedicalReport({
       </div>
 
       {/* Folha do Relatório */}
-      <div id="medical-report-sheet" className="mx-auto max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900 print:max-w-none print:w-full print:border-none print:p-0 print:shadow-none print:m-0">
+      <div id="medical-report-sheet" className="mx-auto max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900 print:max-w-none print:w-full print:border-none print:p-0 print:shadow-none print:m-0 print:bg-white print:text-slate-950 print:overflow-visible print:h-auto">
         {/* Cabeçalho */}
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-200 pb-5 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-200 pb-5 dark:border-slate-800 print:break-inside-avoid">
           <div>
             <div className="flex items-center gap-2">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-brand-500 text-white">
@@ -159,7 +159,7 @@ export default function MedicalReport({
         </div>
 
         {/* Dados do Paciente */}
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 rounded-2xl bg-slate-50 p-4 text-xs text-slate-700 dark:bg-slate-800/40 dark:text-slate-300 sm:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:gap-4 rounded-2xl bg-slate-50 p-4 text-xs text-slate-700 dark:bg-slate-800/40 dark:text-slate-300 sm:grid-cols-4 print:break-inside-avoid">
           <div>
             <p className="font-bold text-slate-400">Paciente</p>
             <p className="font-extrabold text-slate-900 dark:text-white truncate">{profile?.name ?? '—'}</p>
@@ -183,7 +183,7 @@ export default function MedicalReport({
         </div>
 
         {/* Resumo do Tratamento & Peso */}
-        <div className="mt-5 grid gap-3 sm:gap-4 sm:grid-cols-2">
+        <div className="mt-5 grid gap-3 sm:gap-4 sm:grid-cols-2 print:break-inside-avoid">
           {/* Tratamento */}
           <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
             <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
@@ -230,7 +230,7 @@ export default function MedicalReport({
         </div>
 
         {/* NOVO: Hidratação & Proteína / Nutrição */}
-        <div className="mt-5 grid gap-3 sm:gap-4 sm:grid-cols-2">
+        <div className="mt-5 grid gap-3 sm:gap-4 sm:grid-cols-2 print:break-inside-avoid">
           {/* Hidratação */}
           <div className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800 bg-sky-50/40 dark:bg-sky-950/20">
             <p className="text-[11px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-300 flex items-center gap-1.5">
@@ -296,8 +296,8 @@ export default function MedicalReport({
                   : null;
 
                 return (
-                  <div key={ex.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 text-xs dark:border-slate-800 dark:bg-slate-900/60">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 pb-2.5 dark:border-slate-800">
+                  <div key={ex.id} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 text-xs dark:border-slate-800 dark:bg-slate-900/60 print:break-inside-avoid print:bg-white print:border-slate-300">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 pb-2.5 dark:border-slate-800 print:border-slate-200">
                       <span className="font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
                         <FlaskConical className="h-3.5 w-3.5 text-teal-600" /> Coleta realizada em: {new Date(ex.date + 'T12:00:00').toLocaleDateString('pt-BR')}
                       </span>
@@ -412,44 +412,44 @@ export default function MedicalReport({
         </div>
 
         {/* Histórico das Últimas Doses Aplicadas */}
-        <div className="mt-6">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+        <div className="mt-6 print:mt-4">
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 print:text-slate-600 print:break-after-avoid">
             Histórico Completo de Doses Aplicadas ({logs.length} {logs.length === 1 ? 'aplicação' : 'aplicações'} no total)
           </h3>
 
           {logs.length > 0 ? (
-            <div className="mt-2 divide-y divide-slate-100 rounded-2xl border border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800">
+            <div className="mt-2 divide-y divide-slate-100 rounded-2xl border border-slate-200 text-xs dark:divide-slate-800 dark:border-slate-800 print:rounded-none print:border-slate-300 print:divide-slate-200">
               {[...logs]
                 .sort((a, b) => b.date.localeCompare(a.date))
                 .map((l, index) => {
                   const logMed = findMedication(l.medId);
                   const doseNumber = logs.length - index;
                   return (
-                    <div key={l.id} className="flex items-center justify-between p-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <div key={l.id} className="flex items-center justify-between p-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors print:break-inside-avoid print:py-1.5 print:px-2">
                       <div className="flex items-center gap-2.5">
-                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-100 text-[10px] font-extrabold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-100 text-[10px] font-extrabold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 print:bg-slate-200 print:text-slate-800">
                           {doseNumber}
                         </span>
                         <div>
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-bold text-slate-900 dark:text-white">
+                            <span className="font-bold text-slate-900 dark:text-white print:text-black">
                               {fmtDateMedium(new Date(l.date))}
                             </span>
                             <span className="text-slate-400 font-semibold">·</span>
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">
+                            <span className="font-semibold text-slate-700 dark:text-slate-300 print:text-black">
                               {logMed?.brand ?? 'Medicação'}
                             </span>
-                            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-extrabold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-extrabold text-slate-700 dark:bg-slate-800 dark:text-slate-300 print:bg-slate-100 print:text-black">
                               {fmtMg(l.doseMg)}
                             </span>
                             {l.isNewPen && (
-                              <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[9px] font-bold text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+                              <span className="rounded-full bg-teal-100 px-1.5 py-0.5 text-[9px] font-bold text-teal-800 dark:bg-teal-950 dark:text-teal-300 print:bg-teal-50 print:text-teal-900">
                                 Início de Caneta ✨
                               </span>
                             )}
                           </div>
                           {l.notes && (
-                            <p className="mt-0.5 text-[11px] italic text-slate-400">
+                            <p className="mt-0.5 text-[11px] italic text-slate-400 print:text-slate-600">
                               "{l.notes}"
                             </p>
                           )}
@@ -457,7 +457,7 @@ export default function MedicalReport({
                       </div>
                       <div className="shrink-0 text-right">
                         {l.site && (
-                          <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                          <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300 print:bg-slate-100 print:text-black">
                             {INJECTION_SITE_LABELS[l.site]}
                           </span>
                         )}
@@ -472,8 +472,8 @@ export default function MedicalReport({
         </div>
 
         {/* Diário de Sintomas / Efeitos Colaterais */}
-        <div className="mt-6">
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+        <div className="mt-6 print:mt-4">
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 print:text-slate-600 print:break-after-avoid">
             Sintomas e Reações Adversas Reportadas
           </h3>
 
@@ -485,20 +485,20 @@ export default function MedicalReport({
                 .map((s) => (
                   <div
                     key={s.id}
-                    className="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800"
+                    className="rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-800 print:break-inside-avoid print:border-slate-300 print:bg-white"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-white">
+                      <span className="font-bold text-slate-900 dark:text-white print:text-black">
                         {fmtDateMedium(new Date(s.date))}
                       </span>
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300 print:bg-amber-50 print:text-amber-900">
                         Intensidade: {s.severity}
                       </span>
                     </div>
-                    <p className="mt-1 text-slate-700 dark:text-slate-300">
+                    <p className="mt-1 text-slate-700 dark:text-slate-300 print:text-black">
                       <strong>Sintomas:</strong> {s.symptoms.join(', ')}
                     </p>
-                    {s.note && <p className="mt-0.5 italic text-slate-500">"{s.note}"</p>}
+                    {s.note && <p className="mt-0.5 italic text-slate-500 print:text-slate-600">"{s.note}"</p>}
                   </div>
                 ))}
             </div>
@@ -511,8 +511,8 @@ export default function MedicalReport({
 
         {/* Orientações & Condutas Médicas */}
         {((data?.recommendationHistory && data.recommendationHistory.length > 0) || data?.professionalNotes?.medico?.text) && (
-          <div className="mt-6">
-            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <div className="mt-6 print:mt-4">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 print:text-slate-600 print:break-after-avoid flex items-center gap-1.5">
               Condutas e Orientações Médicas Registradas
             </h3>
             <div className="mt-2 space-y-2">
@@ -526,12 +526,12 @@ export default function MedicalReport({
                     date: data?.professionalNotes?.medico?.updatedAt || new Date().toISOString(),
                   }]
               ).map((rec) => (
-                <div key={rec.id} className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-xs dark:border-blue-900/60 dark:bg-blue-950/20">
-                  <div className="flex items-center justify-between border-b border-blue-100 pb-1.5 dark:border-blue-900/40">
-                    <span className="font-extrabold text-blue-950 dark:text-blue-200">{rec.authorName}</span>
-                    <span className="text-[10px] text-slate-500 font-semibold">{new Date(rec.date).toLocaleDateString('pt-BR')}</span>
+                <div key={rec.id} className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-xs dark:border-blue-900/60 dark:bg-blue-950/20 print:break-inside-avoid print:bg-white print:border-slate-300">
+                  <div className="flex items-center justify-between border-b border-blue-100 pb-1.5 dark:border-blue-900/40 print:border-slate-200">
+                    <span className="font-extrabold text-blue-950 dark:text-blue-200 print:text-black">{rec.authorName}</span>
+                    <span className="text-[10px] text-slate-500 font-semibold print:text-slate-600">{new Date(rec.date).toLocaleDateString('pt-BR')}</span>
                   </div>
-                  <p className="mt-1.5 whitespace-pre-line text-slate-800 dark:text-slate-200 leading-relaxed font-medium">{rec.text}</p>
+                  <p className="mt-1.5 whitespace-pre-line text-slate-800 dark:text-slate-200 leading-relaxed font-medium print:text-black">{rec.text}</p>
                 </div>
               ))}
             </div>
@@ -539,7 +539,7 @@ export default function MedicalReport({
         )}
 
         {/* Rodapé / Aviso Legal */}
-        <div className="mt-8 border-t border-slate-200 pt-4 text-[10px] text-slate-400 dark:border-slate-800">
+        <div className="mt-8 border-t border-slate-200 pt-4 text-[10px] text-slate-400 dark:border-slate-800 print:break-inside-avoid print:border-slate-300 print:text-slate-500">
           <p>
             * Este relatório é um documento informativo gerado pelo aplicativo MinhaCaneta a partir
             dos dados inseridos pelo próprio paciente. Não substitui prontuário médico nem laudo
