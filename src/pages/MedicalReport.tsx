@@ -110,23 +110,26 @@ export default function MedicalReport({
   return (
     <div className="min-h-screen bg-slate-100 p-3 sm:p-8 dark:bg-slate-950 print:min-h-0 print:h-auto print:bg-white print:p-0 print:m-0 print:overflow-visible">
       {/* Botões de Ação no Topo (ocultos na impressão) */}
-      <div className="mx-auto max-w-3xl mb-4 sm:mb-6 flex items-center justify-between gap-2 print:hidden">
+      <div className="mx-auto max-w-3xl mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 print:hidden">
         <button
           onClick={() => (onBack ? onBack() : navigate('/app'))}
-          className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white self-start py-1"
         >
           <ArrowLeft className="h-4 w-4" /> {onBack ? 'Voltar ao Painel do Profissional' : 'Voltar ao Painel'}
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Button
             variant="secondary"
             onClick={() => setExamModalOpen(true)}
-            className="!px-3 !py-1.5 sm:!px-4 sm:!py-2 text-xs"
+            className="flex-1 sm:flex-none justify-center !px-3.5 !py-2 text-xs font-bold shadow-xs"
           >
             <FlaskConical className="h-4 w-4 text-teal-600" /> Registrar Exames
           </Button>
-          <Button onClick={handlePrint} className="!px-3 !py-1.5 sm:!px-4 sm:!py-2 text-xs">
+          <Button
+            onClick={handlePrint}
+            className="flex-1 sm:flex-none justify-center !px-3.5 !py-2 text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white shadow-md shadow-brand-600/20"
+          >
             <Printer className="h-4 w-4" /> Imprimir / Salvar PDF
           </Button>
         </div>

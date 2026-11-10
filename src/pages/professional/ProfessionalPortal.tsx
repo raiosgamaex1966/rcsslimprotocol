@@ -187,25 +187,36 @@ export default function ProfessionalPortal() {
           />
         ) : (
           <div className="print:overflow-visible print:h-auto">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 print:hidden">
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 print:hidden">
               <button
                 onClick={() => {
                   if (viewingReport) setViewingReport(false);
                   else setSelectedPatientId(null);
                 }}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400 self-start py-1"
               >
                 <ArrowLeft className="h-3.5 w-3.5" /> {viewingReport ? 'Voltar à visão clínica do paciente' : 'Voltar para meus pacientes'}
               </button>
 
-              <Button
-                variant={viewingReport ? 'secondary' : 'primary'}
-                onClick={() => setViewingReport((v) => !v)}
-                className="!py-1.5 !px-3 text-xs font-bold"
-              >
-                <FileText className="h-4 w-4" />
-                {viewingReport ? 'Voltar ao Painel do Profissional' : 'Ver Relatório Clínico Completo (Impressão / PDF)'}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                {!viewingReport && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => setLabModalOpen(true)}
+                    className="flex-1 sm:flex-none justify-center !py-2 !px-3 text-xs font-bold shadow-xs"
+                  >
+                    <FlaskConical className="h-4 w-4 text-teal-600" /> Registrar Exames
+                  </Button>
+                )}
+                <Button
+                  variant={viewingReport ? 'secondary' : 'primary'}
+                  onClick={() => setViewingReport((v) => !v)}
+                  className="flex-1 sm:flex-none justify-center !py-2 !px-3.5 text-xs font-bold shadow-xs"
+                >
+                  <FileText className="h-4 w-4" />
+                  {viewingReport ? 'Voltar à Visão Clínica' : 'Imprimir / Ver Relatório'}
+                </Button>
+              </div>
             </div>
 
             {!patientData ? (
@@ -392,21 +403,23 @@ function PatientHeader({ data }: { data: PatientData }) {
   const weight = data.weights.at(-1)?.kg ?? data.profile.startWeightKg ?? null;
   const imc = imcInfo(weight, data.profile.heightCm);
   return (
-    <Card className="p-6">
-      <div className="flex flex-wrap items-center gap-4">
-        <Avatar name={data.profile.name} className="h-12 w-12" />
+    <Card className="p-4 sm:p-6">
+      <div className="flex items-center gap-3.5 sm:gap-4">
+        <Avatar name={data.profile.name} className="h-11 w-11 sm:h-12 sm:w-12 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-lg font-extrabold text-slate-900 dark:text-white">{data.profile.name}</p>
-          <p className="text-xs font-semibold text-slate-400">
+          <p className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white leading-tight truncate">{data.profile.name}</p>
+          <p className="text-xs font-semibold text-slate-400 mt-0.5 truncate">
             {age != null ? `${age} anos` : 'idade não informada'} · {data.profile.email}
           </p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-2">
+            {weight != null && (
+              <Badge className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 text-[11px] font-bold">
+                <Scale className="h-3 w-3" /> {weight.toLocaleString('pt-BR')} kg
+              </Badge>
+            )}
+            {imc && <Badge className={cn('bg-slate-100 text-[11px] font-bold', imc.color)}>IMC {imc.imc.toLocaleString('pt-BR')}</Badge>}
+          </div>
         </div>
-        {weight != null && (
-          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            <Scale className="h-3 w-3" /> {weight.toLocaleString('pt-BR')} kg
-          </Badge>
-        )}
-        {imc && <Badge className={cn('bg-slate-100', imc.color)}>IMC {imc.imc.toLocaleString('pt-BR')}</Badge>}
       </div>
     </Card>
   );
@@ -568,9 +581,14 @@ function MedicoView({
             </p>
           </div>
         </div>
-        <Button onClick={onOpenReport} className="shrink-0 !py-2 !px-4 text-xs font-extrabold bg-brand-600 hover:bg-brand-700 text-white shadow-md shadow-brand-600/20">
-          <FileText className="h-4 w-4" /> Abrir Relatório Clínico
-        </Button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Button onClick={onOpenLabModal} variant="secondary" className="flex-1 sm:flex-none justify-center !py-2 !px-3.5 text-xs font-bold">
+            <FlaskConical className="h-4 w-4 text-teal-600" /> Registrar Exames
+          </Button>
+          <Button onClick={onOpenReport} className="flex-1 sm:flex-none justify-center !py-2 !px-4 text-xs font-extrabold bg-brand-600 hover:bg-brand-700 text-white shadow-md shadow-brand-600/20">
+            <Printer className="h-4 w-4" /> Relatório / Imprimir
+          </Button>
+        </div>
       </div>
 
       {severeCount > 0 && (
