@@ -108,7 +108,7 @@ export default function MedicalReport({
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-3 sm:p-8 dark:bg-slate-950 print:bg-white print:p-0">
+    <div className="min-h-screen bg-slate-100 p-3 sm:p-8 dark:bg-slate-950 print:min-h-0 print:bg-white print:p-0 print:m-0">
       {/* Botões de Ação no Topo (ocultos na impressão) */}
       <div className="mx-auto max-w-3xl mb-4 sm:mb-6 flex items-center justify-between gap-2 print:hidden">
         <button
@@ -133,7 +133,7 @@ export default function MedicalReport({
       </div>
 
       {/* Folha do Relatório */}
-      <div className="mx-auto max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900 print:max-w-none print:border-none print:p-0 print:shadow-none">
+      <div id="medical-report-sheet" className="mx-auto max-w-3xl rounded-2xl sm:rounded-3xl border border-slate-200 bg-white p-4 sm:p-8 shadow-xl dark:border-slate-800 dark:bg-slate-900 print:max-w-none print:w-full print:border-none print:p-0 print:shadow-none print:m-0">
         {/* Cabeçalho */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 border-b border-slate-200 pb-5 dark:border-slate-800">
           <div>

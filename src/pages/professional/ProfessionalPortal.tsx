@@ -153,7 +153,7 @@ export default function ProfessionalPortal() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-lg dark:border-slate-800 dark:bg-slate-900/85">
+      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-lg dark:border-slate-800 dark:bg-slate-900/85 print:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-2.5 sm:px-5 sm:py-3">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Logo hideSubtitleOnMobile />
@@ -173,7 +173,7 @@ export default function ProfessionalPortal() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-5 py-7">
+      <main className="mx-auto max-w-6xl px-5 py-7 print:p-0 print:m-0 print:max-w-none">
         {!selectedPatientId ? (
           <PatientList
             professionalId={user.id}
@@ -187,7 +187,7 @@ export default function ProfessionalPortal() {
           />
         ) : (
           <div>
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 print:hidden">
               <button
                 onClick={() => {
                   if (viewingReport) setViewingReport(false);
