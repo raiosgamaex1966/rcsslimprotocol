@@ -178,8 +178,8 @@ values (
   'exercise-videos',
   'exercise-videos',
   true,
-  157286400,
-  array['video/mp4', 'video/webm', 'video/quicktime']
+  52428800,
+  array['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']
 )
 on conflict (id) do update set
   public = excluded.public,

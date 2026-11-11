@@ -64,6 +64,8 @@ import { adaptPrescribedMealPlanWithAI, computeTargets, extractMealPlanFromDocum
 import { extractPdfOrImages } from '../../lib/pdfExtractor';
 import type { ClinicalRecommendation, DayMenu, PatientData, PatientLink } from '../../lib/types';
 import { cn } from '../../utils/cn';
+import ExerciseLinker from '../../components/ExerciseLinker';
+import { EXERCISE_CATALOG, normalizeExerciseText } from '../../lib/exercise';
 
 export default function ProfessionalPortal() {
   const { user, loading } = useAuth();
@@ -620,7 +622,7 @@ function MedicoView({
         <Card className="p-6 lg:col-span-2">
           <SectionTitle icon={<Syringe className="h-4 w-4 text-brand-600" />} title="Tratamento em andamento" />
           {t ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2">
               {[
                 ['Medicamento', med?.brand ?? '—'],
                 ['Princípio ativo', med?.activeIngredient ?? '—'],
@@ -1289,6 +1291,8 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
   const [description, setDescription] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [thumbnailUrl, setThumbnailUrl] = useState('');
+  const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
+  const [extraExerciseText, setExtraExerciseText] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [fileRef] = useState(() => ({ current: null as HTMLInputElement | null }));
@@ -1317,7 +1321,7 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
     try {
       const url = await uploadExerciseVideo(file);
       setVideoUrl(url);
-      setMessage('Upload do vídeo concluído.');
+      setMessage(`Upload de "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)} MB) concluído!`);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Falha no upload do vídeo.');
     } finally {
@@ -1353,7 +1357,15 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
       specialistCredential: '',
       description,
       category: 'forca',
-      exerciseNames: [],
+      exerciseNames: Array.from(
+        new Set([
+          ...selectedExercises,
+          ...extraExerciseText
+            .split(',')
+            .map((x) => x.trim())
+            .filter((x) => x && !new Set(EXERCISE_CATALOG.map((c) => normalizeExerciseText(c.name))).has(normalizeExerciseText(x))),
+        ]),
+      ),
       suitableFor: ['geral'],
       level: 'todos',
       durationMinutes: 10,
@@ -1374,6 +1386,8 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
       setDescription('');
       setVideoUrl('');
       setThumbnailUrl('');
+      setSelectedExercises([]);
+      setExtraExerciseText('');
       setMessage('Vídeo e capa enviados para este paciente!');
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'Falha ao publicar vídeo.');
@@ -1397,6 +1411,18 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
   return (
     <Card className="p-6">
       <SectionTitle icon={<Film className="h-4 w-4 text-cyan-600" />} title="Vídeos de exercícios para este paciente" subtitle="envie uma demonstração exclusiva ou reutilize a biblioteca geral" />
+
+      <div className="mb-3.5">
+        <ExerciseLinker
+          selectedNames={selectedExercises}
+          onChange={setSelectedExercises}
+          onSelectItemMeta={(item) => {
+            if (!title.trim()) setTitle(item.name);
+          }}
+          extraText={extraExerciseText}
+          onExtraTextChange={setExtraExerciseText}
+        />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Título do vídeo">
@@ -1436,7 +1462,11 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
               className="hidden"
-              onChange={(e) => void handleThumbnailUpload(e.target.files?.[0])}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                void handleThumbnailUpload(f);
+              }}
             />
             <Button
               type="button"
@@ -1472,7 +1502,7 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
             fileRef.current = el;
           }}
           type="file"
-          accept="video/mp4,video/webm,video/quicktime"
+          accept="video/mp4,video/webm,video/quicktime,video/x-m4v,.mp4,.webm,.mov,.m4v"
           className="hidden"
           onChange={(e) => void handleUpload(e.target.files?.[0])}
         />
@@ -1492,6 +1522,11 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
             {myAssignments.map((v) => (
               <div key={v.id} className="flex items-center gap-2 rounded-lg bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 dark:bg-cyan-500/10 dark:text-cyan-200">
                 <Film className="h-3.5 w-3.5" /> {v.title}
+                {v.exerciseNames?.map((ex) => (
+                  <span key={ex} className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:bg-slate-800 dark:text-emerald-300">
+                    🔗 {ex}
+                  </span>
+                ))}
                 {videoEmbedUrl(v.videoUrl) && <span className="text-[10px] font-semibold text-cyan-500">· link válido</span>}
               </div>
             ))}

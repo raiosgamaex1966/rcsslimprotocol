@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Film, Image as ImageIcon, Link2, LoaderCircle, Play, Plus, Save, Trash2, Upload } from 'lucide-react';
+import { Check, Film, Image as ImageIcon, Link2, LoaderCircle, Pencil, Play, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 import { Badge, Button, Card, Field, SectionTitle, SelectInput, TextInput } from '../ui';
 import type { ExerciseVideo, ExerciseVideoCategory } from '../../lib/types';
+import { EXERCISE_CATALOG, normalizeExerciseText } from '../../lib/exercise';
+import ExerciseLinker from '../ExerciseLinker';
 import {
   loadExerciseVideos,
   saveExerciseVideos,
@@ -14,28 +16,88 @@ import {
 import { cn } from '../../utils/cn';
 
 const EMPTY: Omit<ExerciseVideo, 'id' | 'createdAt'> = {
-  title: '', specialistName: '', specialistCredential: '', description: '', category: 'forca', exerciseNames: [],
-  suitableFor: ['geral'], level: 'todos', durationMinutes: 10, videoUrl: '', thumbnailUrl: '', published: true,
+  title: '',
+  specialistName: '',
+  specialistCredential: '',
+  description: '',
+  category: 'forca',
+  exerciseNames: [],
+  suitableFor: ['geral'],
+  level: 'todos',
+  durationMinutes: 10,
+  videoUrl: '',
+  thumbnailUrl: '',
+  published: true,
 };
+
+const CATALOG_SET = new Set(EXERCISE_CATALOG.map((item) => normalizeExerciseText(item.name)));
 
 export default function VideoManager() {
   const [videos, setVideos] = useState<ExerciseVideo[]>([]);
   const [form, setForm] = useState(EMPTY);
-  const [exerciseText, setExerciseText] = useState('');
+  const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
+  const [extraExerciseText, setExtraExerciseText] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ kind: 'info' | 'ok' | 'err'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const thumbFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    loadExerciseVideos().then(setVideos).catch((e: Error) => setMessage(e.message));
+    loadExerciseVideos()
+      .then(setVideos)
+      .catch((e: Error) => setMessage({ kind: 'err', text: e.message }));
   }, []);
 
-  function patch(p: Partial<typeof form>) { setForm((old) => ({ ...old, ...p })); }
-  function toggleTag(tag: string) {
-    patch({ suitableFor: form.suitableFor.includes(tag) ? form.suitableFor.filter((x) => x !== tag) : [...form.suitableFor, tag] });
+  function patch(p: Partial<typeof form>) {
+    setForm((old) => ({ ...old, ...p }));
   }
 
-  const thumbFileRef = useRef<HTMLInputElement>(null);
+  function toggleTag(tag: string) {
+    patch({
+      suitableFor: form.suitableFor.includes(tag)
+        ? form.suitableFor.filter((x) => x !== tag)
+        : [...form.suitableFor, tag],
+    });
+  }
+
+  function resetForm() {
+    setForm(EMPTY);
+    setSelectedExercises([]);
+    setExtraExerciseText('');
+    setEditingId(null);
+  }
+
+  function startEdit(video: ExerciseVideo) {
+    const catalogMatches: string[] = [];
+    const customNames: string[] = [];
+    for (const name of video.exerciseNames ?? []) {
+      const matchedCatalog = EXERCISE_CATALOG.find(
+        (c) => normalizeExerciseText(c.name) === normalizeExerciseText(name),
+      );
+      if (matchedCatalog) catalogMatches.push(matchedCatalog.name);
+      else if (name.trim()) customNames.push(name.trim());
+    }
+
+    setEditingId(video.id);
+    setForm({
+      title: video.title,
+      specialistName: video.specialistName,
+      specialistCredential: video.specialistCredential ?? '',
+      description: video.description,
+      category: video.category,
+      exerciseNames: video.exerciseNames ?? [],
+      suitableFor: video.suitableFor?.length ? video.suitableFor : ['geral'],
+      level: video.level,
+      durationMinutes: video.durationMinutes,
+      videoUrl: video.videoUrl,
+      thumbnailUrl: video.thumbnailUrl ?? '',
+      published: video.published,
+    });
+    setSelectedExercises(catalogMatches);
+    setExtraExerciseText(customNames.join(', '));
+    setMessage({ kind: 'info', text: `Editando "${video.title}". Atualize os exercícios vinculados e clique em Salvar alterações.` });
+  }
 
   function handleVideoUrl(val: string) {
     const p: Partial<typeof form> = { videoUrl: val };
@@ -48,72 +110,258 @@ export default function VideoManager() {
 
   async function handleThumbnailUpload(file?: File) {
     if (!file) return;
-    setBusy(true); setMessage('Enviando capa...');
+    setBusy(true);
+    setMessage({ kind: 'info', text: `Enviando capa "${file.name}"...` });
     try {
       const thumbnailUrl = await uploadExerciseThumbnail(file);
       patch({ thumbnailUrl });
-      setMessage('Capa enviada com sucesso!');
-    } catch (e) { setMessage(e instanceof Error ? e.message : 'Falha no upload da capa.'); }
-    finally { setBusy(false); }
+      setMessage({ kind: 'ok', text: 'Capa enviada com sucesso!' });
+    } catch (e) {
+      setMessage({ kind: 'err', text: e instanceof Error ? e.message : 'Falha no upload da capa.' });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleUpload(file?: File) {
     if (!file) return;
-    setBusy(true); setMessage('Enviando vídeo...');
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+    setBusy(true);
+    setMessage({ kind: 'info', text: `Enviando "${file.name}" (${sizeMb} MB) para a nuvem... Aguarde até concluir.` });
     try {
       const videoUrl = await uploadExerciseVideo(file);
-      patch({ videoUrl });
-      setMessage('Upload concluído. Preencha os dados e publique.');
-    } catch (e) { setMessage(e instanceof Error ? e.message : 'Falha no upload.'); }
-    finally { setBusy(false); }
+      patch({
+        videoUrl,
+        title: form.title.trim() ? form.title : file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' '),
+      });
+      setMessage({
+        kind: 'ok',
+        text: `Vídeo "${file.name}" (${sizeMb} MB) enviado! Agora marque os exercícios relacionados abaixo e publique.`,
+      });
+    } catch (e) {
+      setMessage({ kind: 'err', text: e instanceof Error ? e.message : 'Falha no upload do vídeo.' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function combinedExerciseNames(): string[] {
+    const extras = extraExerciseText
+      .split(',')
+      .map((x) => x.trim())
+      .filter((x) => x && !CATALOG_SET.has(normalizeExerciseText(x)));
+    return Array.from(new Set([...selectedExercises, ...extras]));
   }
 
   async function publish() {
-    if (!form.title.trim() || !form.specialistName.trim() || !form.videoUrl.trim()) {
-      setMessage('Informe título, especialista e vídeo/link.'); return;
+    const resolvedTitle = form.title.trim();
+    const resolvedSpecialist = form.specialistName.trim() || 'Especialista MinhaCaneta';
+    const resolvedUrl = form.videoUrl.trim();
+    if (!resolvedTitle || !resolvedUrl) {
+      setMessage({ kind: 'err', text: 'Informe pelo menos o título e envie o arquivo de vídeo (ou cole o link).' });
+      return;
     }
-    const finalThumb = form.thumbnailUrl?.trim() || videoThumbnailUrl(form.videoUrl) || undefined;
-    const next: ExerciseVideo[] = [{
-      ...form,
-      thumbnailUrl: finalThumb,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      exerciseNames: exerciseText.split(',').map((x) => x.trim()).filter(Boolean),
-    }, ...videos];
+
+    const finalThumb = form.thumbnailUrl?.trim() || videoThumbnailUrl(resolvedUrl) || undefined;
+    const exerciseNames = combinedExerciseNames();
+
+    let next: ExerciseVideo[];
+    if (editingId) {
+      next = videos.map((v) =>
+        v.id === editingId
+          ? {
+              ...v,
+              ...form,
+              title: resolvedTitle,
+              specialistName: resolvedSpecialist,
+              videoUrl: resolvedUrl,
+              thumbnailUrl: finalThumb,
+              exerciseNames,
+            }
+          : v,
+      );
+    } else {
+      next = [
+        {
+          ...form,
+          title: resolvedTitle,
+          specialistName: resolvedSpecialist,
+          videoUrl: resolvedUrl,
+          thumbnailUrl: finalThumb,
+          id: crypto.randomUUID(),
+          createdAt: new Date().toISOString(),
+          exerciseNames,
+        },
+        ...videos,
+      ];
+    }
+
     setBusy(true);
     try {
-      await saveExerciseVideos(next); setVideos(next); setForm(EMPTY); setExerciseText(''); setMessage('Vídeo publicado na área do paciente.');
-    } catch (e) { setMessage(e instanceof Error ? e.message : 'Falha ao publicar.'); }
-    finally { setBusy(false); }
+      await saveExerciseVideos(next);
+      setVideos(next);
+      resetForm();
+      setMessage({
+        kind: 'ok',
+        text: editingId
+          ? 'Alterações e vínculos de exercícios salvos com sucesso!'
+          : `Vídeo publicado na área do paciente${exerciseNames.length ? ` e ligado a ${exerciseNames.length} exercício(s)` : ''}.`,
+      });
+    } catch (e) {
+      setMessage({ kind: 'err', text: e instanceof Error ? e.message : 'Falha ao publicar.' });
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function remove(id: string) {
     const next = videos.filter((v) => v.id !== id);
-    await saveExerciseVideos(next); setVideos(next);
+    await saveExerciseVideos(next);
+    setVideos(next);
+    if (editingId === id) resetForm();
   }
 
   return (
     <Card className="p-6">
-      <SectionTitle icon={<Film className="h-4 w-4 text-cyan-600" />} title="Videoteca de especialistas" subtitle="Envie vídeos ou cadastre links do YouTube, Vimeo e arquivos MP4/WebM" />
+      <SectionTitle
+        icon={<Film className="h-4 w-4 text-cyan-600" />}
+        title="Videoteca de especialistas"
+        subtitle="Suba vídeos do seu computador (até 50 MB) ou links e vincule diretamente aos exercícios do paciente"
+      />
       <div className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
         <div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Título do vídeo" required><TextInput value={form.title} onChange={(e) => patch({ title: e.target.value })} placeholder="Ex.: Tai Chi sentado para iniciantes" /></Field>
-            <Field label="Especialista" required><TextInput value={form.specialistName} onChange={(e) => patch({ specialistName: e.target.value })} placeholder="Nome do personal trainer" /></Field>
-            <Field label="Registro/formação"><TextInput value={form.specialistCredential} onChange={(e) => patch({ specialistCredential: e.target.value })} placeholder="Ex.: CREF 000000-G/SP" /></Field>
-            <Field label="Categoria"><SelectInput value={form.category} onChange={(e) => patch({ category: e.target.value as ExerciseVideoCategory })}><option value="forca">Força</option><option value="caminhada">Caminhada</option><option value="mobilidade">Mobilidade</option><option value="equilibrio">Equilíbrio</option><option value="tai_chi">Tai Chi</option><option value="alongamento">Alongamento</option></SelectInput></Field>
-            <Field label="Nível"><SelectInput value={form.level} onChange={(e) => patch({ level: e.target.value as ExerciseVideo['level'] })}><option value="todos">Todos</option><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option></SelectInput></Field>
-            <Field label="Duração (min)"><TextInput type="number" min="1" max="120" value={form.durationMinutes} onChange={(e) => patch({ durationMinutes: Number(e.target.value) })} /></Field>
+          {/* Passo 1: Vincular exercícios do sistema */}
+          <div className="mb-4">
+            <ExerciseLinker
+              selectedNames={selectedExercises}
+              onChange={setSelectedExercises}
+              onSelectItemMeta={(item) => {
+                setForm((old) => ({
+                  ...old,
+                  title: old.title.trim() ? old.title : item.name,
+                  category: old.title.trim() ? old.category : item.category,
+                  suitableFor: Array.from(new Set([...old.suitableFor, ...item.suggestedTags])),
+                }));
+              }}
+              extraText={extraExerciseText}
+              onExtraTextChange={setExtraExerciseText}
+            />
           </div>
-          <div className="mt-3"><Field label="Descrição"><TextInput value={form.description} onChange={(e) => patch({ description: e.target.value })} placeholder="Orientações e objetivo do vídeo" /></Field></div>
-          <div className="mt-3"><Field label="Exercícios relacionados" hint="separe por vírgulas"><TextInput value={exerciseText} onChange={(e) => setExerciseText(e.target.value)} placeholder="Flexão na parede, Remada com elástico" /></Field></div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Título do vídeo" required>
+              <TextInput
+                value={form.title}
+                onChange={(e) => patch({ title: e.target.value })}
+                placeholder="Ex.: Tai Chi sentado: abrir e fechar"
+              />
+            </Field>
+            <Field label="Especialista" hint="opcional (padrão: Equipe)">
+              <TextInput
+                value={form.specialistName}
+                onChange={(e) => patch({ specialistName: e.target.value })}
+                placeholder="Nome do personal trainer"
+              />
+            </Field>
+            <Field label="Registro/formação">
+              <TextInput
+                value={form.specialistCredential}
+                onChange={(e) => patch({ specialistCredential: e.target.value })}
+                placeholder="Ex.: CREF 000000-G/SP"
+              />
+            </Field>
+            <Field label="Categoria">
+              <SelectInput
+                value={form.category}
+                onChange={(e) => patch({ category: e.target.value as ExerciseVideoCategory })}
+              >
+                <option value="forca">Força</option>
+                <option value="caminhada">Caminhada</option>
+                <option value="mobilidade">Mobilidade</option>
+                <option value="equilibrio">Equilíbrio</option>
+                <option value="tai_chi">Tai Chi</option>
+                <option value="alongamento">Alongamento</option>
+              </SelectInput>
+            </Field>
+            <Field label="Nível">
+              <SelectInput
+                value={form.level}
+                onChange={(e) => patch({ level: e.target.value as ExerciseVideo['level'] })}
+              >
+                <option value="todos">Todos</option>
+                <option value="iniciante">Iniciante</option>
+                <option value="intermediario">Intermediário</option>
+              </SelectInput>
+            </Field>
+            <Field label="Duração (min)">
+              <TextInput
+                type="number"
+                min="1"
+                max="120"
+                value={form.durationMinutes}
+                onChange={(e) => patch({ durationMinutes: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+          <div className="mt-3">
+            <Field label="Descrição">
+              <TextInput
+                value={form.description}
+                onChange={(e) => patch({ description: e.target.value })}
+                placeholder="Orientações e objetivo do vídeo"
+              />
+            </Field>
+          </div>
 
           <p className="mt-4 text-xs font-extrabold text-slate-700 dark:text-slate-200">Indicado para</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">{VIDEO_SUITABILITY.map(([tag, label]) => <button type="button" key={tag} onClick={() => toggleTag(tag)} className={cn('rounded-full border px-2.5 py-1.5 text-[10px] font-bold', form.suitableFor.includes(tag) ? 'border-cyan-600 bg-cyan-600 text-white' : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300')}>{form.suitableFor.includes(tag) && <Check className="mr-1 inline h-3 w-3" />}{label}</button>)}</div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {VIDEO_SUITABILITY.map(([tag, label]) => (
+              <button
+                type="button"
+                key={tag}
+                onClick={() => toggleTag(tag)}
+                className={cn(
+                  'rounded-full border px-2.5 py-1.5 text-[10px] font-bold',
+                  form.suitableFor.includes(tag)
+                    ? 'border-cyan-600 bg-cyan-600 text-white'
+                    : 'border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300',
+                )}
+              >
+                {form.suitableFor.includes(tag) && <Check className="mr-1 inline h-3 w-3" />}
+                {label}
+              </button>
+            ))}
+          </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <Field label="Link do vídeo"><div className="relative"><Link2 className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><TextInput value={form.videoUrl} onChange={(e) => handleVideoUrl(e.target.value)} className="pl-10" placeholder="YouTube, Vimeo ou MP4" /></div></Field>
-            <Field label="Ou envie um arquivo" hint="MP4/WebM/MOV"><input ref={fileRef} type="file" accept="video/mp4,video/webm,video/quicktime" className="hidden" onChange={(e) => void handleUpload(e.target.files?.[0])} /><Button variant="secondary" full onClick={() => fileRef.current?.click()} disabled={busy}>{busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}Selecionar e enviar vídeo</Button></Field>
+            <Field label="Link do vídeo">
+              <div className="relative">
+                <Link2 className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <TextInput
+                  value={form.videoUrl}
+                  onChange={(e) => handleVideoUrl(e.target.value)}
+                  className="pl-10"
+                  placeholder="YouTube, Vimeo ou MP4"
+                />
+              </div>
+            </Field>
+            <Field label="Ou envie do computador" hint="MP4/WebM/MOV (até 50 MB)">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="video/mp4,video/webm,video/quicktime,video/x-m4v,.mp4,.webm,.mov,.m4v"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  void handleUpload(f);
+                }}
+              />
+              <Button variant="secondary" full onClick={() => fileRef.current?.click()} disabled={busy}>
+                {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Selecionar e enviar vídeo
+              </Button>
+            </Field>
           </div>
 
           <div className="mt-3">
@@ -121,10 +369,31 @@ export default function VideoManager() {
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative min-w-0 flex-1">
                   <ImageIcon className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <TextInput value={form.thumbnailUrl ?? ''} onChange={(e) => patch({ thumbnailUrl: e.target.value })} className="pl-10" placeholder="https://… ou envie arquivo ao lado" />
+                  <TextInput
+                    value={form.thumbnailUrl ?? ''}
+                    onChange={(e) => patch({ thumbnailUrl: e.target.value })}
+                    className="pl-10"
+                    placeholder="https://… ou envie arquivo ao lado"
+                  />
                 </div>
-                <input ref={thumbFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => void handleThumbnailUpload(e.target.files?.[0])} />
-                <Button type="button" variant="secondary" onClick={() => thumbFileRef.current?.click()} disabled={busy} className="!px-3 !py-2 text-xs">
+                <input
+                  ref={thumbFileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    void handleThumbnailUpload(f);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => thumbFileRef.current?.click()}
+                  disabled={busy}
+                  className="!px-3 !py-2 text-xs"
+                >
                   <Upload className="h-3.5 w-3.5" /> Enviar foto
                 </Button>
               </div>
@@ -135,29 +404,141 @@ export default function VideoManager() {
                   <img src={form.thumbnailUrl} alt="" className="h-full w-full object-cover" />
                 </div>
                 <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Capa configurada</span>
-                <button type="button" onClick={() => patch({ thumbnailUrl: '' })} className="text-[10px] font-bold text-rose-500 hover:underline">Remover</button>
+                <button
+                  type="button"
+                  onClick={() => patch({ thumbnailUrl: '' })}
+                  className="text-[10px] font-bold text-rose-500 hover:underline"
+                >
+                  Remover
+                </button>
               </div>
             )}
           </div>
 
-          <label className="mt-4 flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200"><input type="checkbox" checked={form.published} onChange={(e) => patch({ published: e.target.checked })} className="accent-brand-600" /> Publicar imediatamente para pacientes</label>
-          {message && <p className="mt-3 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{message}</p>}
-          <Button onClick={publish} disabled={busy} className="mt-4"><Plus className="h-4 w-4" />Adicionar à videoteca</Button>
+          <label className="mt-4 flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              checked={form.published}
+              onChange={(e) => patch({ published: e.target.checked })}
+              className="accent-brand-600"
+            />
+            Publicar imediatamente para pacientes
+          </label>
+
+          {message && (
+            <p
+              className={cn(
+                'mt-3 rounded-xl p-3 text-xs font-semibold',
+                message.kind === 'err'
+                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-200'
+                  : message.kind === 'ok'
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-200'
+                    : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+              )}
+            >
+              {message.text}
+            </p>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Button onClick={publish} disabled={busy}>
+              {editingId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {editingId ? 'Salvar alterações e vínculos' : 'Adicionar à videoteca'}
+            </Button>
+            {editingId && (
+              <Button type="button" variant="secondary" onClick={resetForm}>
+                <X className="h-4 w-4" /> Cancelar edição
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="border-t border-slate-200 pt-5 dark:border-slate-800 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-          <p className="text-xs font-extrabold text-slate-800 dark:text-slate-100">Vídeos publicados ({videos.length})</p>
-          <div className="mt-3 max-h-[560px] space-y-3 overflow-y-auto pr-1">
-            {!videos.length && <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400 dark:border-slate-700">Nenhum vídeo cadastrado.</div>}
-            {videos.map((v) => <div key={v.id} className="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-              <div className="flex gap-3"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300"><Play className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-xs font-extrabold text-slate-800 dark:text-slate-100">{v.title}</p><p className="text-[10px] text-slate-400">{v.specialistName} · {v.durationMinutes} min</p></div><button onClick={() => void remove(v.id)} className="text-slate-300 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button></div>
-              <div className="mt-2 flex flex-wrap gap-1"><Badge className="bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">{v.category}</Badge>{v.suitableFor.slice(0, 3).map((t) => <Badge key={t} className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">{t}</Badge>)}</div>
-              {videoEmbedUrl(v.videoUrl) && <p className="mt-2 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">Link incorporável validado</p>}
-            </div>)}
+          <p className="text-xs font-extrabold text-slate-800 dark:text-slate-100">
+            Vídeos publicados ({videos.length})
+          </p>
+          <div className="mt-3 max-h-[640px] space-y-3 overflow-y-auto pr-1">
+            {!videos.length && (
+              <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400 dark:border-slate-700">
+                Nenhum vídeo cadastrado.
+              </div>
+            )}
+            {videos.map((v) => (
+              <div
+                key={v.id}
+                className={cn(
+                  'rounded-xl border p-3 transition-colors',
+                  editingId === v.id
+                    ? 'border-cyan-500 bg-cyan-50/30 dark:bg-cyan-950/20'
+                    : 'border-slate-200 dark:border-slate-800',
+                )}
+              >
+                <div className="flex gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">
+                    <Play className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-extrabold text-slate-800 dark:text-slate-100">{v.title}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {v.specialistName} · {v.durationMinutes} min
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(v)}
+                    className="text-slate-400 hover:text-cyan-600 p-1"
+                    title="Vincular exercícios / Editar vídeo"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void remove(v.id)}
+                    className="text-slate-300 hover:text-rose-500 p-1"
+                    title="Excluir vídeo"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {v.exerciseNames?.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {v.exerciseNames.map((exName) => (
+                      <Badge key={exName} className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                        🔗 {exName}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                    Nenhum exercício vinculado — clique no lápis para vincular
+                  </p>
+                )}
+
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <Badge className="bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">
+                    {v.category}
+                  </Badge>
+                  {v.suitableFor.slice(0, 3).map((t) => (
+                    <Badge key={t} className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                      {t}
+                    </Badge>
+                  ))}
+                </div>
+                {videoEmbedUrl(v.videoUrl) && (
+                  <p className="mt-2 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                    Link incorporável validado
+                  </p>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
-      <div className="mt-4 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"><Save className="mt-0.5 h-3.5 w-3.5 shrink-0" />Publique somente material autorizado pelo especialista, com credenciais verificadas e orientação de segurança. No modo demonstração, arquivos locais são limitados a 3 MB.</div>
+      <div className="mt-4 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+        <Save className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        Publique somente material autorizado pelo especialista. No servidor conectado, vídeos locais suportam até 50 MB (MP4/WebM/MOV); para vídeos maiores, use link do YouTube ou Vimeo.
+      </div>
     </Card>
   );
 }

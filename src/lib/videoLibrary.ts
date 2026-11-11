@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from './supabase';
+import { normalizeExerciseText } from './exercise';
 import type { ExerciseVideo } from './types';
 
 const LOCAL_KEY = 'minhacaneta_exercise_videos';
@@ -44,15 +45,30 @@ export async function saveExerciseVideos(videos: ExerciseVideo[]): Promise<void>
   if (error) throw new Error(error.message);
 }
 
-/** Upload para bucket público no Supabase; no demo usa data URL para arquivos pequenos. */
+/** Upload para bucket público no Supabase (até 50 MB); no demo usa data URL para arquivos pequenos. */
 export async function uploadExerciseVideo(file: File): Promise<string> {
-  const allowed = ['video/mp4', 'video/webm', 'video/quicktime'];
-  if (!allowed.includes(file.type)) throw new Error('Formato não aceito. Use MP4, WebM ou MOV.');
-  if (file.size > 150 * 1024 * 1024) throw new Error('O vídeo deve ter no máximo 150 MB.');
+  const extMatch = file.name.toLowerCase().match(/\.(mp4|webm|mov|m4v)$/);
+  const extMimeMap: Record<string, string> = {
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    mov: 'video/quicktime',
+    m4v: 'video/x-m4v',
+  };
+  const resolvedType = file.type || (extMatch ? extMimeMap[extMatch[1]] : '');
+  const allowed = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-m4v'];
+  if (!allowed.includes(resolvedType)) {
+    throw new Error('Formato não aceito. Use MP4, WebM, M4V ou MOV.');
+  }
+  const maxBytes = 50 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    throw new Error(
+      `O vídeo tem ${(file.size / (1024 * 1024)).toFixed(1)} MB e excede o limite de 50 MB do servidor. Comprima o MP4 ou use um link do YouTube/Vimeo.`,
+    );
+  }
 
   if (!isSupabaseConfigured) {
     if (file.size > 3 * 1024 * 1024) {
-      throw new Error('No modo demonstração, use arquivo de até 3 MB ou cadastre um link. No Supabase o limite é 150 MB.');
+      throw new Error('No modo demonstração, use arquivo de até 3 MB ou cadastre um link. No Supabase o limite é 50 MB.');
     }
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -65,7 +81,7 @@ export async function uploadExerciseVideo(file: File): Promise<string> {
   const safeName = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
   const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeName}`;
   const { error } = await supabase!.storage.from('exercise-videos').upload(path, file, {
-    contentType: file.type,
+    contentType: resolvedType,
     cacheControl: '3600',
   });
   if (error) throw new Error(error.message);
@@ -147,4 +163,43 @@ export function recommendedVideos(videos: ExerciseVideo[], limitations: string[]
       const score = (v: ExerciseVideo) => v.suitableFor.filter((tag) => tags.has(tag)).length + (v.assignedPatientIds?.includes(patientId ?? '') ? 10 : 0);
       return score(b) - score(a);
     });
+}
+
+/** Localiza o melhor vídeo publicado para um exercício específico (match em exerciseNames ou título). */
+export function matchVideoForExercise(
+  videos: ExerciseVideo[],
+  exerciseName: string,
+  patientId?: string,
+): ExerciseVideo | undefined {
+  const target = normalizeExerciseText(exerciseName);
+  if (!target) return undefined;
+
+  const eligible = videos
+    .filter((v) => v.published)
+    .filter((v) => !v.assignedPatientIds?.length || (patientId && v.assignedPatientIds.includes(patientId)));
+
+  let best: { video: ExerciseVideo; score: number } | undefined;
+  for (const video of eligible) {
+    let score = 0;
+    const assignedBonus = patientId && video.assignedPatientIds?.includes(patientId) ? 50 : 0;
+
+    for (const linked of video.exerciseNames ?? []) {
+      const cand = normalizeExerciseText(linked);
+      if (!cand) continue;
+      if (cand === target) score = Math.max(score, 100 + assignedBonus);
+      else if (target.includes(cand) || cand.includes(target)) score = Math.max(score, 60 + assignedBonus);
+    }
+
+    if (score === 0) {
+      const titleNorm = normalizeExerciseText(video.title);
+      if (titleNorm && (titleNorm === target || titleNorm.includes(target) || target.includes(titleNorm))) {
+        score = 30 + assignedBonus;
+      }
+    }
+
+    if (score > 0 && (!best || score > best.score)) {
+      best = { video, score };
+    }
+  }
+  return best?.video;
 }

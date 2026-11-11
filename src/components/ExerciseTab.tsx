@@ -12,8 +12,10 @@ import {
   Pencil,
   ShieldCheck,
   ExternalLink,
+  Play,
   Sparkles,
   Tv,
+  X,
   Footprints,
 } from 'lucide-react';
 import { Badge, Button, Card, Field, SectionTitle, SelectInput, TextInput } from './ui';
@@ -29,8 +31,8 @@ import { getLLMConfig } from '../lib/llm';
 import { weeklyWeightTrend } from '../lib/schedule';
 import { cn } from '../utils/cn';
 import type { ExerciseVideo } from '../lib/types';
-import { loadExerciseVideos, recommendedVideos, videoEmbedUrl, videoThumbnailUrl } from '../lib/videoLibrary';
-import { type WorkoutSession } from '../lib/exercise';
+import { loadExerciseVideos, matchVideoForExercise, recommendedVideos, videoEmbedUrl, videoThumbnailUrl } from '../lib/videoLibrary';
+import { type PlannedExercise, type WorkoutSession } from '../lib/exercise';
 import WorkoutTvModal from './WorkoutTvModal';
 
 interface Props {
@@ -98,6 +100,11 @@ export default function ExerciseTab({ userId, data, update }: Props) {
   const [videos, setVideos] = useState<ExerciseVideo[]>([]);
   const [openVideo, setOpenVideo] = useState<string | null>(null);
   const [tvSessionId, setTvSessionId] = useState<string | null>(null);
+  const [activeVideoModal, setActiveVideoModal] = useState<{
+    video: ExerciseVideo;
+    exercise: PlannedExercise;
+    sessionId: string;
+  } | null>(null);
   const llm = getLLMConfig();
   const aiReady = Boolean(llm?.enabled && llm.apiKey && llm.model);
 
@@ -171,7 +178,7 @@ export default function ExerciseTab({ userId, data, update }: Props) {
 
   function findExerciseVideo(exerciseName: string): ExerciseVideo | undefined {
     const normalized = exerciseName.toLocaleLowerCase('pt-BR');
-    return suggestedVideos.find((video) =>
+    return matchVideoForExercise(videos, exerciseName, userId) ?? suggestedVideos.find((video) =>
       video.exerciseNames.some((name) => {
         const candidate = name.toLocaleLowerCase('pt-BR');
         return normalized.includes(candidate) || candidate.includes(normalized);
@@ -179,10 +186,6 @@ export default function ExerciseTab({ userId, data, update }: Props) {
     );
   }
 
-  function showExerciseVideo(videoId: string) {
-    setOpenVideo(videoId);
-    window.setTimeout(() => document.getElementById(`video-${videoId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
-  }
 
   return (
     <div className="mt-6 space-y-6">
@@ -314,10 +317,10 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                               {tutorial && (
                                 <button
                                   type="button"
-                                  onClick={() => showExerciseVideo(tutorial.id)}
-                                  className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-extrabold text-cyan-700 hover:underline dark:text-cyan-300"
+                                  onClick={() => setActiveVideoModal({ video: tutorial, exercise, sessionId: session.id })}
+                                  className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-cyan-600 px-3 py-1.5 text-[11px] font-extrabold text-white shadow-sm hover:bg-cyan-700 transition-colors"
                                 >
-                                  <Film className="h-3 w-3" /> Ver demonstração do especialista
+                                  <Play className="h-3 w-3 fill-current" /> Assistir vídeo do exercício
                                 </button>
                               )}
                             </div>
@@ -340,6 +343,86 @@ export default function ExerciseTab({ userId, data, update }: Props) {
           )}
 
           <section>
+            {activeVideoModal && (() => {
+              const modalEmbed = videoEmbedUrl(activeVideoModal.video.videoUrl);
+              return (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
+                  onClick={() => setActiveVideoModal(null)}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label={activeVideoModal.video.title}
+                >
+                  <div
+                    className="w-full max-w-3xl overflow-hidden rounded-3xl border border-white/15 bg-slate-900 text-white shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-3.5">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">
+                          Vídeo do Exercício · {activeVideoModal.video.specialistName}
+                        </p>
+                        <h4 className="truncate text-sm sm:text-base font-extrabold">{activeVideoModal.exercise.name}</h4>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const sid = activeVideoModal.sessionId;
+                            setActiveVideoModal(null);
+                            setTvSessionId(sid);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500 px-3 py-1.5 text-xs font-extrabold text-slate-950 hover:bg-cyan-400 transition-colors"
+                        >
+                          <Tv className="h-3.5 w-3.5" /> Abrir no Modo TV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveVideoModal(null)}
+                          className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 text-slate-200 hover:bg-white/20"
+                          title="Fechar vídeo"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="aspect-video w-full bg-black">
+                      {modalEmbed ? (
+                        <iframe
+                          src={modalEmbed}
+                          title={activeVideoModal.video.title}
+                          className="h-full w-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      ) : (
+                        <video
+                          src={activeVideoModal.video.videoUrl}
+                          poster={activeVideoModal.video.thumbnailUrl}
+                          controls
+                          autoPlay
+                          playsInline
+                          className="h-full w-full bg-black"
+                        />
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5 p-5 text-xs sm:text-sm text-slate-200">
+                      <p className="font-bold text-cyan-300">
+                        {activeVideoModal.exercise.sets} séries · {activeVideoModal.exercise.reps} · pausa {activeVideoModal.exercise.restSeconds}s
+                      </p>
+                      <p className="leading-relaxed text-slate-300">{activeVideoModal.exercise.instructions}</p>
+                      {activeVideoModal.exercise.adaptation && (
+                        <p className="text-xs font-semibold text-amber-300">
+                          Adaptação: {activeVideoModal.exercise.adaptation}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             {(() => {
               const tvSession = effectivePlan?.sessions.find((s) => s.id === tvSessionId) as WorkoutSession | undefined;
               if (!tvSession) return null;

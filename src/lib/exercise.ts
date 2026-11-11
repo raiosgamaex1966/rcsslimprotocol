@@ -207,3 +207,42 @@ export function cacheWorkout(userId: string, a: PhysicalAssessment, weightKg: nu
   localStorage.setItem(`minhacaneta_workout_${userId}_${weekKey()}_${assessmentSignature(a, weightKg)}`, JSON.stringify(plan));
 }
 
+
+
+export interface ExerciseCatalogItem {
+  name: string;
+  category: 'forca' | 'caminhada' | 'mobilidade' | 'equilibrio' | 'tai_chi' | 'alongamento';
+  suggestedTags: string[];
+}
+
+function inferCatalogCategory(tags: string[]): ExerciseCatalogItem['category'] {
+  if (tags.includes('tai_chi')) return 'tai_chi';
+  if (tags.includes('mobilidade')) return 'mobilidade';
+  if (tags.includes('cardio') || tags.includes('ar_livre')) return 'caminhada';
+  if (tags.includes('equilibrio')) return 'equilibrio';
+  return 'forca';
+}
+
+function inferSuggestedTags(tags: string[]): string[] {
+  const out = new Set<string>(['geral']);
+  if (tags.includes('cadeira')) out.add('cadeira');
+  if (tags.includes('equilibrio')) out.add('equilibrio');
+  if (tags.includes('joelho')) out.add('joelho');
+  if (tags.includes('iniciante')) out.add('sedentario');
+  return Array.from(out);
+}
+
+/** Lista oficial dos exercícios do plano adaptativo para vincular vídeos e treinos. */
+export const EXERCISE_CATALOG: ExerciseCatalogItem[] = EXERCISES.map((ex) => ({
+  name: ex.name,
+  category: inferCatalogCategory(ex.tags),
+  suggestedTags: inferSuggestedTags(ex.tags),
+}));
+
+export function normalizeExerciseText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .trim();
+}
