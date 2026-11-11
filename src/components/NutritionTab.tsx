@@ -3,6 +3,8 @@ import {
   Apple,
   Beef,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Droplets,
   Flame,
   LoaderCircle,
@@ -68,6 +70,7 @@ export default function NutritionTab({ userId, data, update }: Props) {
   const logs = data.logs ?? [];
   const nutritionLogs = data.nutritionLogs ?? [];
   const [dayIdx, setDayIdx] = useState(todayIndex());
+  const [planExpanded, setPlanExpanded] = useState(false);
   const [aiDays, setAiDays] = useState<DayMenu[] | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -382,32 +385,58 @@ export default function NutritionTab({ userId, data, update }: Props) {
         </div>
       )}
 
-      {/* Banner de Dieta Prescrita pelo Nutricionista (se houver) */}
+      {/* Banner compacto de Dieta Prescrita pelo Nutricionista (recolhível) */}
       {nutritionOverride?.mealPlanText && (
-        <Card className="border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white p-6 shadow-lg shadow-emerald-100 dark:border-emerald-500/50 dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 pb-3 dark:border-emerald-800">
-            <div className="flex items-center gap-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/30">
+        <Card className="border-2 border-emerald-500/80 bg-gradient-to-br from-emerald-50 via-teal-50/50 to-white p-4 sm:p-5 shadow-md shadow-emerald-100/70 dark:border-emerald-500/50 dark:from-emerald-950/40 dark:via-slate-900 dark:to-slate-900">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/30">
                 <UtensilsCrossed className="h-4 w-4" />
               </span>
-              <div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
-                  ★ Plano Prescrito pelo Profissional
-                </span>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">
+                    ★ Plano Prescrito pelo Profissional
+                  </span>
+                  <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    Nutricionista: <b>{nutritionOverride.authorName}</b> · {new Date(nutritionOverride.updatedAt).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+                <h3 className="mt-0.5 truncate text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
                   {nutritionOverride.mealPlanTitle || 'Dieta Personalizada'}
                 </h3>
               </div>
             </div>
-            <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-              Nutricionista: <b>{nutritionOverride.authorName}</b> · Atualizado em{' '}
-              {new Date(nutritionOverride.updatedAt).toLocaleDateString('pt-BR')}
-            </p>
+
+            <button
+              type="button"
+              onClick={() => setPlanExpanded((v) => !v)}
+              aria-expanded={planExpanded}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3.5 py-2 text-xs font-bold text-emerald-800 shadow-sm hover:bg-emerald-50 transition-colors dark:border-emerald-700 dark:bg-slate-800 dark:text-emerald-200 dark:hover:bg-emerald-950/60"
+            >
+              {planExpanded ? (
+                <>
+                  <ChevronUp className="h-4 w-4" /> Ocultar prescrição
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" /> Ver prescrição completa
+                </>
+              )}
+            </button>
           </div>
 
-          <div className="mt-4 whitespace-pre-line text-xs leading-relaxed text-slate-800 dark:text-slate-200">
-            {nutritionOverride.mealPlanText}
-          </div>
+          {!planExpanded && (
+            <p className="mt-2.5 text-[11px] font-medium text-emerald-800/80 dark:text-emerald-300/80">
+              Seu cardápio diário adaptado já está organizado em refeições interativas no <b>Cardápio da semana</b> abaixo. Clique em &ldquo;Ver prescrição completa&rdquo; quando quiser consultar o texto original.
+            </p>
+          )}
+
+          {planExpanded && (
+            <div className="mt-4 max-h-96 overflow-y-auto border-t border-emerald-200/80 pt-3.5 pr-1 whitespace-pre-line text-xs leading-relaxed text-slate-800 dark:border-emerald-800/60 dark:text-slate-200">
+              {nutritionOverride.mealPlanText}
+            </div>
+          )}
         </Card>
       )}
 
