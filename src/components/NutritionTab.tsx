@@ -17,7 +17,9 @@ import { Badge, Button, Card, DisclaimerBox, SectionTitle, TextInput } from './u
 import { ageFromBirth, fmtMg, weeklyWeightTrend } from '../lib/schedule';
 import { findMedication } from '../data/medications';
 import {
+  adaptPrescribedMealPlanWithAI,
   analyzeMealText,
+  parsePrescribedPlanFallback,
   buildFallbackWeekMenu,
   cacheAIMenu,
   computeTargets,
@@ -115,7 +117,21 @@ export default function NutritionTab({ userId, data, update }: Props) {
     [targets],
   );
 
-  const days: DayMenu[] = useMemo(() => aiDays ?? fallbackMenu?.days ?? [], [aiDays, fallbackMenu]);
+  const prescribedDays: DayMenu[] | null = useMemo(() => {
+    if (!nutritionOverride?.mealPlanText) return null;
+    if (nutritionOverride.structuredDays && nutritionOverride.structuredDays.length > 0) {
+      return nutritionOverride.structuredDays;
+    }
+    if (targets) {
+      return parsePrescribedPlanFallback(nutritionOverride.mealPlanText, targets);
+    }
+    return null;
+  }, [nutritionOverride, targets]);
+
+  const days: DayMenu[] = useMemo(
+    () => prescribedDays ?? aiDays ?? fallbackMenu?.days ?? [],
+    [prescribedDays, aiDays, fallbackMenu]
+  );
 
   const llmCfg = getLLMConfig();
   const [serverAiConfigured, setServerAiConfigured] = useState<boolean | null>(null);
@@ -233,17 +249,35 @@ export default function NutritionTab({ userId, data, update }: Props) {
   }
 
   async function generateWithAI() {
-    if (!targets || !treatment) return;
+    if (!targets) return;
     setAiBusy(true);
     setAiError(null);
     try {
       const activeCfg = llmCfg || { provider: 'openrouter', apiKey: 'configured_on_server', model: 'openai/gpt-4o-mini', enabled: true };
-      const generated = await generateAIMenu(activeCfg, treatment, profile!, weightKg!, targets, doseMg, logs);
-      cacheAIMenu(userId, generated, menuSignature);
-      setAiDays(generated);
+      if (nutritionOverride?.mealPlanText) {
+        const adapted = await adaptPrescribedMealPlanWithAI(
+          activeCfg,
+          nutritionOverride.mealPlanText,
+          targets,
+          profile!,
+          weightKg ?? 80,
+          treatment,
+          nutritionOverride.authorName
+        );
+        update((prev) => ({
+          ...prev,
+          nutritionOverride: prev.nutritionOverride
+            ? { ...prev.nutritionOverride, structuredDays: adapted }
+            : prev.nutritionOverride,
+        }));
+      } else {
+        if (!treatment) return;
+        const generated = await generateAIMenu(activeCfg, treatment, profile!, weightKg!, targets, doseMg, logs);
+        cacheAIMenu(userId, generated, menuSignature);
+        setAiDays(generated);
+      }
     } catch (e) {
       setAiError(e instanceof Error ? e.message : 'Falha ao gerar com IA. Usando cardápio padrão.');
-      setAiDays(null);
     } finally {
       setAiBusy(false);
     }
@@ -540,7 +574,11 @@ export default function NutritionTab({ userId, data, update }: Props) {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">Cardápio da semana</h3>
           <div className="flex items-center gap-2">
-            {aiDays ? (
+            {prescribedDays ? (
+              <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                ★ Prescrito por {nutritionOverride?.authorName || 'Nutricionista'} (Adaptado IA)
+              </Badge>
+            ) : aiDays ? (
               <Badge className="bg-violet-100 text-violet-700">
                 <Sparkles className="h-3 w-3" /> Gerado por IA
               </Badge>
@@ -550,7 +588,7 @@ export default function NutritionTab({ userId, data, update }: Props) {
             {aiConfigured && (
               <Button variant="secondary" className="!px-3 !py-1.5 text-[11px]" onClick={generateWithAI} disabled={aiBusy}>
                 {aiBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-violet-500" />}
-                {aiBusy ? 'Gerando…' : aiDays ? 'Regenerar com IA' : 'Gerar com IA'}
+                {aiBusy ? 'Adaptando…' : prescribedDays ? 'Variar opções (IA)' : aiDays ? 'Regenerar com IA' : 'Gerar com IA'}
               </Button>
             )}
             {!aiConfigured && (

@@ -71,6 +71,33 @@ export interface ProfessionalNotes {
   history?: ClinicalRecommendation[];
 }
 
+export type MealId = 'cafe' | 'colacao' | 'almoco' | 'lanche' | 'jantar' | 'ceia';
+
+export interface MenuItemOut {
+  name: string;
+  portion: string;
+  proteinG: number;
+  kcal: number;
+}
+
+export interface MenuMeal {
+  mealId: MealId;
+  name: string;
+  time: string;
+  items: MenuItemOut[];
+  proteinG: number;
+  proteinTarget: number;
+  kcal: number;
+}
+
+export interface DayMenu {
+  dayIndex: number; // 0 = segunda-feira
+  dayName: string;
+  meals: MenuMeal[];
+  proteinG: number;
+  kcal: number;
+}
+
 /** Ajustes manuais e dieta prescrita pelo nutricionista. */
 export interface NutritionOverride {
   proteinG?: number;
@@ -79,6 +106,7 @@ export interface NutritionOverride {
   note?: string;
   mealPlanTitle?: string;
   mealPlanText?: string;
+  structuredDays?: DayMenu[];
   prescribedMeals?: {
     name: string;
     time?: string;

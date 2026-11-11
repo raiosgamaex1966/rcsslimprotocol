@@ -30,6 +30,7 @@ import {
 import { Avatar, Badge, Button, Card, DisclaimerBox, Logo, ModeBadge, SectionTitle, TextInput } from '../../components/ui';
 import Onboarding from '../../components/Onboarding';
 import NutritionTab from '../../components/NutritionTab';
+import TodayMealPlanCard from '../../components/TodayMealPlanCard';
 import ExerciseTab from '../../components/ExerciseTab';
 import ThemeSwitcher from '../../components/ThemeSwitcher';
 import SymptomLog from '../../components/SymptomLog';
@@ -1236,6 +1237,16 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                     </Card>
                   </div>
                 </div>
+
+                {/* Cardápio de Hoje (Prioridade total para plano prescrito pelo nutricionista) */}
+                {data && (
+                  <TodayMealPlanCard
+                    userId={user.id}
+                    data={data}
+                    update={update}
+                    onOpenNutritionTab={() => setTab('nutricao')}
+                  />
+                )}
 
                 {/* Peso + histórico */}
                 <div className="grid gap-5 lg:grid-cols-3">

@@ -59,8 +59,8 @@ import {
   treatmentWeek,
   weeklyWeightTrend,
 } from '../../lib/schedule';
-import { computeTargets } from '../../lib/llm';
-import type { ClinicalRecommendation, PatientData, PatientLink } from '../../lib/types';
+import { adaptPrescribedMealPlanWithAI, computeTargets, getLLMConfig } from '../../lib/llm';
+import type { ClinicalRecommendation, DayMenu, PatientData, PatientLink } from '../../lib/types';
 import { cn } from '../../utils/cn';
 
 export default function ProfessionalPortal() {
@@ -811,6 +811,65 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
   const [mealPlanTitle, setMealPlanTitle] = useState(data.nutritionOverride?.mealPlanTitle ?? '');
   const [mealPlanText, setMealPlanText] = useState(data.nutritionOverride?.mealPlanText ?? '');
   const [savedOverride, setSavedOverride] = useState(false);
+  const [adaptingPlan, setAdaptingPlan] = useState(false);
+  const [previewDayIdx, setPreviewDayIdx] = useState(0);
+
+  async function handleSaveMealPlan() {
+    const trimmedText = mealPlanText.trim();
+    const base = targets ?? {
+      proteinG: 120,
+      proteinPerKg: 1.4,
+      kcal: 1600,
+      carbsG: 140,
+      fatG: 50,
+      waterMl: 2500,
+      fiberG: 28,
+      rapidLoss: false,
+    };
+
+    const adjustedTargets = {
+      ...base,
+      proteinG: proteinOverride.trim() ? Number(proteinOverride) : base.proteinG,
+      kcal: kcalOverride.trim() ? Number(kcalOverride) : base.kcal,
+      fiberG: fiberOverride.trim() ? Number(fiberOverride) : base.fiberG,
+    };
+
+    setAdaptingPlan(true);
+    let structuredDays: DayMenu[] | undefined = undefined;
+    if (trimmedText) {
+      try {
+        structuredDays = await adaptPrescribedMealPlanWithAI(
+          getLLMConfig(),
+          trimmedText,
+          adjustedTargets,
+          data.profile,
+          weight || 80,
+          data.treatment,
+          professionalName
+        );
+      } catch (err) {
+        console.warn('Erro ao estruturar dieta com IA:', err);
+      }
+    }
+    setAdaptingPlan(false);
+
+    update((prev) => ({
+      ...prev,
+      nutritionOverride: {
+        ...prev.nutritionOverride,
+        proteinG: proteinOverride.trim() ? Number(proteinOverride) : undefined,
+        kcal: kcalOverride.trim() ? Number(kcalOverride) : undefined,
+        fiberG: fiberOverride.trim() ? Number(fiberOverride) : undefined,
+        mealPlanTitle: mealPlanTitle.trim() || undefined,
+        mealPlanText: trimmedText || undefined,
+        structuredDays,
+        authorName: professionalName,
+        updatedAt: new Date().toISOString(),
+      },
+    }));
+    setSavedOverride(true);
+    window.setTimeout(() => setSavedOverride(false), 3500);
+  }
   const nutritionLogs = data.nutritionLogs ?? [];
   const recentCompliance = nutritionLogs.slice(-7);
 
@@ -890,42 +949,105 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
           </Field>
         </div>
 
-        <Button
-          className="mt-4 !px-5 !py-2.5 text-xs font-bold"
-          onClick={() => {
-            update((prev) => ({
-              ...prev,
-              nutritionOverride: {
-                ...prev.nutritionOverride,
-                proteinG: proteinOverride.trim() ? Number(proteinOverride) : undefined,
-                kcal: kcalOverride.trim() ? Number(kcalOverride) : undefined,
-                fiberG: fiberOverride.trim() ? Number(fiberOverride) : undefined,
-                mealPlanTitle: mealPlanTitle.trim() || undefined,
-                mealPlanText: mealPlanText.trim() || undefined,
-                authorName: professionalName,
-                updatedAt: new Date().toISOString(),
-              },
-            }));
-            setSavedOverride(true);
-            window.setTimeout(() => setSavedOverride(false), 2500);
-          }}
-        >
-          {savedOverride ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-          {savedOverride ? 'Dieta e Metas Salvas com Sucesso!' : 'Salvar Plano Alimentar do Paciente'}
-        </Button>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            className="!px-5 !py-2.5 text-xs font-bold"
+            disabled={adaptingPlan}
+            onClick={() => void handleSaveMealPlan()}
+          >
+            {adaptingPlan ? (
+              <>
+                <LoaderCircle className="h-4 w-4 animate-spin" /> Adaptando cardápio com IA para o paciente…
+              </>
+            ) : savedOverride ? (
+              <>
+                <Check className="h-4 w-4" /> Plano Salvo e Adaptado com Sucesso!
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" /> Salvar e Adaptar Plano no App do Paciente
+              </>
+            )}
+          </Button>
+          {adaptingPlan && (
+            <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+              Estruturando os 7 dias da semana e calculando proteínas...
+            </span>
+          )}
+        </div>
+
+        {/* Pré-visualização do Cardápio Adaptado pela IA */}
+        {data.nutritionOverride?.structuredDays && data.nutritionOverride.structuredDays.length > 0 && (
+          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 dark:border-emerald-800/60 dark:bg-emerald-950/20">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <p className="text-xs font-extrabold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5" /> Cardápio Adaptado Ativo no App do Paciente
+              </p>
+              <div className="flex gap-1 overflow-x-auto">
+                {data.nutritionOverride.structuredDays.map((d, i) => (
+                  <button
+                    key={d.dayIndex}
+                    type="button"
+                    onClick={() => setPreviewDayIdx(i)}
+                    className={cn(
+                      'px-2 py-1 rounded-lg text-[10px] font-bold transition-colors',
+                      previewDayIdx === i
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white text-slate-600 hover:bg-emerald-100 dark:bg-slate-800 dark:text-slate-300'
+                    )}
+                  >
+                    {d.dayName.slice(0, 3)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {data.nutritionOverride.structuredDays[previewDayIdx]?.meals.map((m) => (
+                <div key={m.mealId} className="rounded-xl border border-emerald-100 bg-white p-2.5 text-xs dark:border-slate-800 dark:bg-slate-900">
+                  <div className="flex items-center justify-between font-bold text-slate-800 dark:text-slate-100">
+                    <span>{m.name} ({m.time})</span>
+                    <span className="text-emerald-600 text-[10px]">{m.proteinG}g prot · {m.kcal} kcal</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    {m.items.map((it) => `${it.name} (${it.portion})`).join(' · ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
-      <NoteEditor
+            <NoteEditor
         title="Observação nutricional"
         icon={<HeartPulse className="h-4 w-4 text-emerald-600" />}
         value={data.professionalNotes?.nutricionista}
+        history={data.recommendationHistory ?? data.professionalNotes?.history}
+        role="nutricionista"
         authorName={professionalName}
-        onSave={(text) =>
-          update((prev) => ({
-            ...prev,
-            professionalNotes: { ...prev.professionalNotes, nutricionista: { text, authorName: professionalName, updatedAt: new Date().toISOString() } },
-          }))
-        }
+        onSave={(text) => {
+          const now = new Date().toISOString();
+          const newEntry: ClinicalRecommendation = {
+            id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+            role: 'nutricionista',
+            authorName: professionalName,
+            text,
+            date: now,
+          };
+          update((prev) => {
+            const prevHist = prev.recommendationHistory ?? prev.professionalNotes?.history ?? [];
+            const nextHist = [newEntry, ...prevHist];
+            return {
+              ...prev,
+              recommendationHistory: nextHist,
+              professionalNotes: {
+                ...prev.professionalNotes,
+                nutricionista: { text, authorName: professionalName, updatedAt: now },
+                history: nextHist,
+              },
+            };
+          });
+        }}
       />
       <DisclaimerBox compact />
     </div>

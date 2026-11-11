@@ -1,6 +1,7 @@
 import { food, scaledPortion, type FoodItem } from '../data/foods';
 import { findMedication } from '../data/medications';
-import type { DoseLog, LabExam, Profile, Treatment } from './types';
+import type { DayMenu, DoseLog, LabExam, MealId, MenuItemOut, MenuMeal, Profile, Treatment } from './types';
+export type { DayMenu, MealId, MenuItemOut, MenuMeal };
 import { ageFromBirth, doseAtDate, treatmentWeek, WEEKDAY_NAMES } from './schedule';
 
 /* ============================================================
@@ -62,32 +63,7 @@ export function computeTargets(input: NutritionInput): NutritionTargets {
  * CARDÁPIOS — modelo
  * ============================================================ */
 
-export type MealId = 'cafe' | 'colacao' | 'almoco' | 'lanche' | 'jantar' | 'ceia';
-
-export interface MenuItemOut {
-  name: string;
-  portion: string;
-  proteinG: number;
-  kcal: number;
-}
-
-export interface MenuMeal {
-  mealId: MealId;
-  name: string;
-  time: string;
-  items: MenuItemOut[];
-  proteinG: number;
-  proteinTarget: number;
-  kcal: number;
-}
-
-export interface DayMenu {
-  dayIndex: number; // 0 = segunda-feira
-  dayName: string;
-  meals: MenuMeal[];
-  proteinG: number;
-  kcal: number;
-}
+// Tipos MealId, MenuItemOut, MenuMeal, DayMenu importados e re-exportados de ./types
 
 export interface WeekMenu {
   days: DayMenu[];
@@ -1044,5 +1020,321 @@ Responda ESTRITAMENTE em formato JSON puro (sem marcações markdown adicionais 
       success: false,
       error: err.message || 'Erro ao processar as imagens do laudo com IA.',
     };
+  }
+}
+
+
+/* ============================================================
+ * ADAPTAÇÃO DE PLANO ALIMENTAR PRESCRITO PELO NUTRICIONISTA
+ * Opção A: Mantém rigorosamente quantidades, horários e regras
+ * do nutricionista, gerando variações saudáveis permitidas ao
+ * longo dos 7 dias da semana.
+ * ============================================================ */
+
+function detectMealMetaFromLine(text: string): { id: MealId; name: string; defaultTime: string; share: number } | null {
+  const lower = text.toLowerCase();
+  if (lower.includes('café') || lower.includes('cafe') || lower.includes('desjejum')) {
+    return { id: 'cafe', name: 'Café da manhã', defaultTime: '07:30', share: 0.25 };
+  }
+  if (lower.includes('colação') || lower.includes('colacao') || lower.includes('lanche da manhã') || lower.includes('lanche da manha')) {
+    return { id: 'colacao', name: 'Colação', defaultTime: '10:00', share: 0.08 };
+  }
+  if (lower.includes('almoço') || lower.includes('almoco')) {
+    return { id: 'almoco', name: 'Almoço', defaultTime: '12:30', share: 0.3 };
+  }
+  if (lower.includes('lanche') || lower.includes('tarde')) {
+    return { id: 'lanche', name: 'Lanche da tarde', defaultTime: '16:00', share: 0.12 };
+  }
+  if (lower.includes('jantar') || lower.includes('janta')) {
+    return { id: 'jantar', name: 'Jantar', defaultTime: '19:30', share: 0.2 };
+  }
+  if (lower.includes('ceia') || lower.includes('noite')) {
+    return { id: 'ceia', name: 'Ceia', defaultTime: '21:30', share: 0.05 };
+  }
+  return null;
+}
+
+export function parsePrescribedPlanFallback(prescribedText: string, targets: NutritionTargets): DayMenu[] {
+  const lines = prescribedText
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^[•\-*\d.)]+\s*/, '').trim())
+    .filter(Boolean);
+
+  const parsedMeals: {
+    id: MealId;
+    name: string;
+    time: string;
+    share: number;
+    options: string[];
+  }[] = [];
+
+  for (const line of lines) {
+    const meta = detectMealMetaFromLine(line);
+    if (!meta) {
+      // Se não identificou cabeçalho de refeição mas já existe uma anterior, anexa como item/detalhe
+      if (parsedMeals.length > 0) {
+        parsedMeals[parsedMeals.length - 1].options[0] += ` + ${line}`;
+      }
+      continue;
+    }
+
+    const timeMatch = line.match(/(\d{1,2})[:h](\d{2})/i);
+    const time = timeMatch ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}` : meta.defaultTime;
+
+    const colonIdx = line.indexOf(':');
+    const body = colonIdx >= 0 ? line.slice(colonIdx + 1).trim() : line;
+
+    // Divide opções alternativas tipo "A ou B" para variar entre dias da semana (Opção A)
+    const rawOptions = body
+      .split(/\s+ou\s+/i)
+      .map((o) => o.trim())
+      .filter(Boolean);
+
+    parsedMeals.push({
+      id: meta.id,
+      name: meta.name,
+      time,
+      share: meta.share,
+      options: rawOptions.length > 0 ? rawOptions : [body || meta.name],
+    });
+  }
+
+  // Se o texto não seguia linhas com rótulos claros, cria refeições únicas baseadas no texto
+  if (parsedMeals.length === 0) {
+    return Array.from({ length: 7 }, (_, di) => ({
+      dayIndex: di,
+      dayName: WEEKDAY_NAMES[(di + 1) % 7],
+      meals: [
+        {
+          mealId: 'almoco',
+          name: 'Plano Alimentar Prescrito',
+          time: 'Dia todo',
+          items: [
+            {
+              name: prescribedText.trim(),
+              portion: 'Conforme prescrição do nutricionista',
+              proteinG: targets.proteinG,
+              kcal: targets.kcal,
+            },
+          ],
+          proteinG: targets.proteinG,
+          proteinTarget: targets.proteinG,
+          kcal: targets.kcal,
+        },
+      ],
+      proteinG: targets.proteinG,
+      kcal: targets.kcal,
+    }));
+  }
+
+  const totalShare = parsedMeals.reduce((acc, m) => acc + m.share, 0) || 1;
+
+  return Array.from({ length: 7 }, (_, di) => {
+    const meals: MenuMeal[] = parsedMeals.map((pm) => {
+      // Alterna entre as opções "ou" conforme o dia da semana
+      const chosenOption = pm.options[di % pm.options.length];
+      const parts = chosenOption
+        .split(/\s*\+\s*|\s*,\s*(?![^()]*\))/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+      const mealProteinTarget = Math.round(targets.proteinG * (pm.share / totalShare));
+      const mealKcalTarget = Math.round(targets.kcal * (pm.share / totalShare));
+
+      const items: MenuItemOut[] = parts.map((part, idx) => {
+        const pShare = idx === 0 ? 0.65 : 0.35 / Math.max(1, parts.length - 1);
+        return {
+          name: part,
+          portion: 'Conforme prescrição',
+          proteinG: Math.max(1, Math.round(mealProteinTarget * (parts.length === 1 ? 1 : pShare))),
+          kcal: Math.max(20, Math.round(mealKcalTarget * (parts.length === 1 ? 1 : pShare))),
+        };
+      });
+
+      const proteinG = items.reduce((s, i) => s + i.proteinG, 0);
+      const kcal = items.reduce((s, i) => s + i.kcal, 0);
+
+      return {
+        mealId: pm.id,
+        name: pm.name,
+        time: pm.time,
+        items,
+        proteinG,
+        proteinTarget: mealProteinTarget,
+        kcal,
+      };
+    });
+
+    return {
+      dayIndex: di,
+      dayName: WEEKDAY_NAMES[(di + 1) % 7],
+      meals,
+      proteinG: meals.reduce((s, m) => s + m.proteinG, 0),
+      kcal: meals.reduce((s, m) => s + m.kcal, 0),
+    };
+  });
+}
+
+function parsePrescribedAIMenu(text: string, prescribedText: string, targets: NutritionTargets): DayMenu[] {
+  const sanitized = repairTruncatedJSON(text);
+  const start = sanitized.indexOf('{');
+  const end = sanitized.lastIndexOf('}');
+  if (start === -1 || end === -1) return parsePrescribedPlanFallback(prescribedText, targets);
+
+  let obj: {
+    dias?: {
+      dia?: number;
+      dia_nome?: string;
+      refeicoes?: {
+        refeicao?: string;
+        horario?: string;
+        itens?: { alimento?: string; quantidade?: string; proteina_g?: number | string; kcal?: number | string }[];
+        proteina_g?: number | string;
+        kcal?: number | string;
+      }[];
+    }[];
+  };
+
+  try {
+    obj = JSON.parse(sanitized.slice(start, end + 1));
+  } catch {
+    return parsePrescribedPlanFallback(prescribedText, targets);
+  }
+
+  if (!Array.isArray(obj.dias) || obj.dias.length === 0) {
+    return parsePrescribedPlanFallback(prescribedText, targets);
+  }
+
+  const mealOrder: MealId[] = ['cafe', 'colacao', 'almoco', 'lanche', 'jantar', 'ceia'];
+  const mealNames: Record<string, MealId> = {
+    'café da manhã': 'cafe',
+    'cafe da manha': 'cafe',
+    'colação': 'colacao',
+    'colacao': 'colacao',
+    'almoço': 'almoco',
+    'almoco': 'almoco',
+    'lanche da tarde': 'lanche',
+    'lanche': 'lanche',
+    'jantar': 'jantar',
+    'ceia': 'ceia',
+  };
+
+  const targetsPerMeal = mealProteinTargets(targets.proteinG);
+  const fallbackDays = parsePrescribedPlanFallback(prescribedText, targets);
+
+  return Array.from({ length: 7 }, (_, di) => {
+    const d = obj.dias && obj.dias[di % obj.dias.length];
+    if (!d || !Array.isArray(d.refeicoes) || d.refeicoes.length === 0) {
+      return fallbackDays[di];
+    }
+
+    let mealIdx = 0;
+    const meals: MenuMeal[] = d.refeicoes.slice(0, 6).map((r) => {
+      const rawName = (r.refeicao ?? '').trim();
+      const detected = detectMealMetaFromLine(rawName);
+      const mealId = mealNames[rawName.toLowerCase()] ?? detected?.id ?? mealOrder[mealIdx++] ?? 'cafe';
+      const meta = MEAL_META.find((m) => m.id === mealId)!;
+      const items: MenuItemOut[] = (r.itens ?? []).map((i) => ({
+        name: String(i.alimento ?? '—'),
+        portion: String(i.quantidade ?? 'conforme prescrição'),
+        proteinG: Number(i.proteina_g ?? 0) || 0,
+        kcal: Number(i.kcal ?? 0) || 0,
+      }));
+      const proteinG = Number(r.proteina_g ?? 0) || Math.round(items.reduce((s, i) => s + i.proteinG, 0));
+      const kcal = Number(r.kcal ?? 0) || items.reduce((s, i) => s + i.kcal, 0);
+      return {
+        mealId,
+        name: rawName || meta.name,
+        time: r.horario ?? meta.time,
+        items,
+        proteinG,
+        proteinTarget: targetsPerMeal[mealId] || Math.round(targets.proteinG / d.refeicoes!.length),
+        kcal,
+      };
+    });
+
+    return {
+      dayIndex: di,
+      dayName: d.dia_nome ?? WEEKDAY_NAMES[(di + 1) % 7],
+      meals,
+      proteinG: meals.reduce((s, m) => s + m.proteinG, 0),
+      kcal: meals.reduce((s, m) => s + m.kcal, 0),
+    };
+  });
+}
+
+export async function adaptPrescribedMealPlanWithAI(
+  cfg: LLMConfig | null,
+  prescribedText: string,
+  targets: NutritionTargets,
+  profile: Profile,
+  weightKg: number,
+  treatment: Treatment | null,
+  authorName?: string,
+): Promise<DayMenu[]> {
+  const cleanText = prescribedText.trim();
+  if (!cleanText) return [];
+
+  const activeCfg = cfg || getLLMConfig() || {
+    provider: 'openrouter' as LLMProvider,
+    apiKey: 'configured_on_server',
+    model: 'openai/gpt-4o-mini',
+    enabled: true,
+  };
+
+  const med = treatment ? findMedication(treatment.medId) : undefined;
+  const doseMg = currentDoseMg(treatment);
+
+  const prompt = `Você é um nutricionista especialista em terapia com análogos de GLP-1/GIP.
+O(a) nutricionista do paciente (${authorName || 'Nutricionista Assistente'}) prescreveu formalmente o seguinte plano alimentar:
+
+"""
+${cleanText}
+"""
+
+CONTEXTO DO PACIENTE:
+- Nome: ${profile.name}
+- Peso atual: ${weightKg} kg
+- Medicação atual: ${med?.brand || 'GLP-1'} (${doseMg} mg)
+- Meta diária alvo: ~${targets.proteinG}g de proteína | ~${targets.kcal} kcal
+
+SUA TAREFA (ESTRATÉGIA OPÇÃO A):
+1. Estruture e adapte o plano alimentar acima para TODOS OS 7 DIAS DA SEMANA (Segunda a Domingo).
+2. RESPEITE RIGOROSAMENTE as quantidades, horários, refeições e alimentos prescritos pelo nutricionista.
+3. Gere variações saudáveis e equivalentes ao longo dos 7 dias usando exatamente as opções/substituições permitidas pelo nutricionista (ex: se disse "frango ou peixe", alterne frango em uns dias e peixe em outros; varie legumes e frutas conforme o padrão prescrito para evitar monotonia).
+4. NÃO invente refeições extras fora do que o nutricionista prescreveu e NÃO remova refeições prescritas.
+5. Calcule proteínas em gramas (proteina_g) e calorias (kcal) estimadas para cada item.
+
+RETORNE ESTRITAMENTE JSON PURO (sem markdown nem explicações), seguindo o modelo abaixo:
+{
+  "dias": [
+    {
+      "dia": 1,
+      "dia_nome": "Segunda-feira",
+      "refeicoes": [
+        {
+          "refeicao": "Café da manhã",
+          "horario": "07:30",
+          "itens": [
+            { "alimento": "Ovos mexidos", "quantidade": "2 unidades", "proteina_g": 12, "kcal": 140 },
+            { "alimento": "Pão integral", "quantidade": "1 fatia", "proteina_g": 3, "kcal": 70 }
+          ],
+          "proteina_g": 15,
+          "kcal": 210
+        }
+      ]
+    }
+  ]
+}`;
+
+  try {
+    const raw = await requestLLM(activeCfg, prompt, 6000);
+    if (!raw || !raw.trim()) {
+      return parsePrescribedPlanFallback(cleanText, targets);
+    }
+    return parsePrescribedAIMenu(raw, cleanText, targets);
+  } catch (err) {
+    console.warn('Falha ao adaptar plano com IA, usando parser estruturado local:', err);
+    return parsePrescribedPlanFallback(cleanText, targets);
   }
 }
