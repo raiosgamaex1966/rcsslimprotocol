@@ -11,7 +11,10 @@ import {
   LoaderCircle,
   Pencil,
   ShieldCheck,
+  ExternalLink,
   Sparkles,
+  Tv,
+  Video,
   Footprints,
 } from 'lucide-react';
 import { Badge, Button, Card, Field, SectionTitle, SelectInput, TextInput } from './ui';
@@ -28,6 +31,8 @@ import { weeklyWeightTrend } from '../lib/schedule';
 import { cn } from '../utils/cn';
 import type { ExerciseVideo } from '../lib/types';
 import { loadExerciseVideos, recommendedVideos, videoEmbedUrl, videoThumbnailUrl } from '../lib/videoLibrary';
+import { exerciseYoutubeUrl, type WorkoutSession } from '../lib/exercise';
+import WorkoutTvModal from './WorkoutTvModal';
 
 interface Props {
   userId: string;
@@ -93,6 +98,7 @@ export default function ExerciseTab({ userId, data, update }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [videos, setVideos] = useState<ExerciseVideo[]>([]);
   const [openVideo, setOpenVideo] = useState<string | null>(null);
+  const [tvSessionId, setTvSessionId] = useState<string | null>(null);
   const llm = getLLMConfig();
   const aiReady = Boolean(llm?.enabled && llm.apiKey && llm.model);
 
@@ -220,7 +226,19 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                 </Badge>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {effectivePlan && effectivePlan.sessions.length > 0 && !saved?.hasWarningSymptoms && (
+                <Button
+                  variant="secondary"
+                  className="!border-cyan-300 !bg-cyan-50 !text-cyan-800 hover:!bg-cyan-100 dark:!border-cyan-700 dark:!bg-cyan-950/60 dark:!text-cyan-200"
+                  onClick={() => {
+                    const nextPending = effectivePlan.sessions.find((s) => !logs.some((l) => l.sessionId === s.id && l.completed));
+                    setTvSessionId((nextPending ?? effectivePlan.sessions[0]).id);
+                  }}
+                >
+                  <Tv className="h-4 w-4" /> Modo TV / Tela Grande
+                </Button>
+              )}
               <Button variant="secondary" onClick={() => setEditing(true)}>
                 <Pencil className="h-4 w-4" /> Atualizar avaliação
               </Button>
@@ -269,7 +287,17 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                           <h4 className="mt-0.5 text-base font-extrabold text-slate-900 dark:text-white">{session.title}</h4>
                           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{session.focus} · {session.intensity}</p>
                         </div>
-                        <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Clock3 className="h-3 w-3" /> {session.durationMinutes} min</Badge>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setTvSessionId(session.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[10px] font-extrabold text-cyan-700 hover:bg-cyan-100 dark:border-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-300 transition-colors"
+                            title="Abrir este treino em tela cheia ou espelhar na TV"
+                          >
+                            <Tv className="h-3 w-3" /> Abrir na TV
+                          </button>
+                          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"><Clock3 className="h-3 w-3" /> {session.durationMinutes} min</Badge>
+                        </div>
                       </div>
                       <div className="space-y-3 p-5">
                         {session.exercises.map((exercise, index) => {
@@ -284,7 +312,27 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                               </div>
                               <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{exercise.instructions}</p>
                               {exercise.adaptation && <p className="mt-0.5 text-[10px] font-semibold text-amber-700">Adaptação: {exercise.adaptation}</p>}
-                              {tutorial && <button onClick={() => showExerciseVideo(tutorial.id)} className="mt-1 inline-flex items-center gap-1 text-[10px] font-extrabold text-cyan-700 hover:underline"><Film className="h-3 w-3" /> Ver demonstração do especialista</button>}
+                              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                {tutorial && (
+                                  <button
+                                    type="button"
+                                    onClick={() => showExerciseVideo(tutorial.id)}
+                                    className="inline-flex items-center gap-1 text-[10px] font-extrabold text-cyan-700 hover:underline dark:text-cyan-300"
+                                  >
+                                    <Film className="h-3 w-3" /> Ver demonstração do especialista
+                                  </button>
+                                )}
+                                <a
+                                  href={exerciseYoutubeUrl(exercise, tutorial?.videoUrl)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-0.5 text-[10px] font-extrabold text-rose-700 hover:bg-rose-100 dark:bg-rose-950/50 dark:text-rose-300 transition-colors"
+                                  title="Abrir execução no YouTube (permite transmitir direto para a Smart TV)"
+                                >
+                                  <Video className="h-3 w-3" /> Ver no YouTube
+                                  <ExternalLink className="h-2.5 w-2.5 opacity-70" />
+                                </a>
+                              </div>
                             </div>
                           </div>
                           );
@@ -305,6 +353,20 @@ export default function ExerciseTab({ userId, data, update }: Props) {
           )}
 
           <section>
+            {(() => {
+              const tvSession = effectivePlan?.sessions.find((s) => s.id === tvSessionId) as WorkoutSession | undefined;
+              if (!tvSession) return null;
+              const tvDone = logs.some((l) => l.sessionId === tvSession.id && l.completed);
+              return (
+                <WorkoutTvModal
+                  session={tvSession}
+                  findVideo={findExerciseVideo}
+                  isCompleted={tvDone}
+                  onToggleComplete={() => toggleSession(tvSession.id)}
+                  onClose={() => setTvSessionId(null)}
+                />
+              );
+            })()}
             <SectionTitle
               icon={<Film className="h-4 w-4 text-cyan-600" />}
               title="Vídeos para acompanhar"
@@ -378,6 +440,17 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                           </Badge>
                         </div>
                         <p className="mt-2 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{video.description}</p>
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                          <a
+                            href={video.videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            <Tv className="h-3 w-3 text-cyan-600" /> Abrir em tela grande / TV
+                            <ExternalLink className="h-2.5 w-2.5 opacity-60" />
+                          </a>
+                        </div>
                         {selected && (
                           <button
                             onClick={() => setOpenVideo(null)}

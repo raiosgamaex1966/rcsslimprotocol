@@ -337,7 +337,7 @@ export interface WorkoutPlanLike {
     focus: string;
     durationMinutes: number;
     intensity: string;
-    exercises: { name: string; sets: number; reps: string; restSeconds: number; instructions: string; adaptation?: string }[];
+    exercises: { name: string; sets: number; reps: string; restSeconds: number; instructions: string; adaptation?: string; youtubeUrl?: string }[];
   }[];
   weeklyMinutes: number;
   source: 'adaptativo' | 'ia';

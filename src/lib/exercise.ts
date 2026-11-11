@@ -5,6 +5,7 @@ import { findMedication } from '../data/medications';
 import { doseAtDate, treatmentWeek } from './schedule';
 
 export interface PlannedExercise {
+  youtubeUrl?: string;
   name: string;
   sets: number;
   reps: string;
@@ -204,4 +205,19 @@ export function getCachedWorkout(userId: string, a: PhysicalAssessment, weightKg
 
 export function cacheWorkout(userId: string, a: PhysicalAssessment, weightKg: number, plan: WorkoutPlan): void {
   localStorage.setItem(`minhacaneta_workout_${userId}_${weekKey()}_${assessmentSignature(a, weightKg)}`, JSON.stringify(plan));
+}
+
+
+/** Retorna link direto do vídeo (se houver) ou busca exata de execução correta no YouTube. */
+export function exerciseYoutubeUrl(
+  exercise: { name: string; youtubeUrl?: string },
+  libraryVideoUrl?: string,
+): string {
+  const direct = exercise.youtubeUrl || libraryVideoUrl;
+  if (direct && /(youtube\.com|youtu\.be)/i.test(direct)) {
+    return direct;
+  }
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(
+    `como fazer ${exercise.name} exercício execução correta`,
+  )}`;
 }
