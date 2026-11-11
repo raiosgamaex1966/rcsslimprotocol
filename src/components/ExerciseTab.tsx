@@ -12,10 +12,8 @@ import {
   Pencil,
   ShieldCheck,
   ExternalLink,
-  Maximize2,
   Sparkles,
   Tv,
-  X,
   Footprints,
 } from 'lucide-react';
 import { Badge, Button, Card, Field, SectionTitle, SelectInput, TextInput } from './ui';
@@ -32,7 +30,7 @@ import { weeklyWeightTrend } from '../lib/schedule';
 import { cn } from '../utils/cn';
 import type { ExerciseVideo } from '../lib/types';
 import { loadExerciseVideos, recommendedVideos, videoEmbedUrl, videoThumbnailUrl } from '../lib/videoLibrary';
-import { exercisePhotoUrl, type PlannedExercise, type WorkoutSession } from '../lib/exercise';
+import { type WorkoutSession } from '../lib/exercise';
 import WorkoutTvModal from './WorkoutTvModal';
 
 interface Props {
@@ -100,7 +98,6 @@ export default function ExerciseTab({ userId, data, update }: Props) {
   const [videos, setVideos] = useState<ExerciseVideo[]>([]);
   const [openVideo, setOpenVideo] = useState<string | null>(null);
   const [tvSessionId, setTvSessionId] = useState<string | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<{ url: string; exercise: PlannedExercise; sessionId: string } | null>(null);
   const llm = getLLMConfig();
   const aiReady = Boolean(llm?.enabled && llm.apiKey && llm.model);
 
@@ -304,7 +301,6 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                       <div className="space-y-3 p-5">
                         {session.exercises.map((exercise, index) => {
                           const tutorial = findExerciseVideo(exercise.name);
-                          const photoUrl = exercisePhotoUrl(exercise.name);
                           return (
                           <div key={`${exercise.name}-${index}`} className="flex gap-3">
                             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-50 text-[10px] font-extrabold text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">{index + 1}</span>
@@ -315,25 +311,6 @@ export default function ExerciseTab({ userId, data, update }: Props) {
                               </div>
                               <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">{exercise.instructions}</p>
                               {exercise.adaptation && <p className="mt-0.5 text-[10px] font-semibold text-amber-700">Adaptação: {exercise.adaptation}</p>}
-                              {photoUrl && (
-                                <button
-                                  type="button"
-                                  onClick={() => setPhotoPreview({ url: photoUrl, exercise, sessionId: session.id })}
-                                  className="group relative mt-2 block w-full max-w-[280px] overflow-hidden rounded-xl border border-slate-200 bg-slate-100 text-left shadow-sm transition hover:border-cyan-400 hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
-                                  title="Toque para ampliar a foto demonstrativa"
-                                >
-                                  <img
-                                    src={photoUrl}
-                                    alt={`Como fazer ${exercise.name}`}
-                                    loading="lazy"
-                                    className="aspect-video w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                                  />
-                                  <span className="flex items-center justify-between gap-2 bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-cyan-800 dark:bg-slate-900/95 dark:text-cyan-200">
-                                    <span>📸 Como fazer (ampliar foto)</span>
-                                    <Maximize2 className="h-3 w-3 shrink-0" />
-                                  </span>
-                                </button>
-                              )}
                               {tutorial && (
                                 <button
                                   type="button"
@@ -363,66 +340,6 @@ export default function ExerciseTab({ userId, data, update }: Props) {
           )}
 
           <section>
-            {photoPreview && (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm"
-                onClick={() => setPhotoPreview(null)}
-                role="dialog"
-                aria-modal="true"
-                aria-label={photoPreview.exercise.name}
-              >
-                <div
-                  className="w-full max-w-3xl overflow-hidden rounded-3xl border border-white/15 bg-slate-900 text-white shadow-2xl"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-3.5">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">
-                        Demonstração Visual
-                      </p>
-                      <h4 className="text-sm sm:text-base font-extrabold">{photoPreview.exercise.name}</h4>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const sid = photoPreview.sessionId;
-                          setPhotoPreview(null);
-                          setTvSessionId(sid);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-500 px-3 py-1.5 text-xs font-extrabold text-slate-950 hover:bg-cyan-400 transition-colors"
-                      >
-                        <Tv className="h-3.5 w-3.5" /> Abrir no Modo TV
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPhotoPreview(null)}
-                        className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 text-slate-200 hover:bg-white/20"
-                        title="Fechar foto"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <img
-                    src={photoPreview.url}
-                    alt={photoPreview.exercise.name}
-                    className="max-h-[65vh] w-full bg-black object-contain"
-                  />
-                  <div className="space-y-1.5 p-5 text-xs sm:text-sm text-slate-200">
-                    <p className="font-bold text-cyan-300">
-                      {photoPreview.exercise.sets} séries · {photoPreview.exercise.reps} · pausa {photoPreview.exercise.restSeconds}s
-                    </p>
-                    <p className="leading-relaxed text-slate-300">{photoPreview.exercise.instructions}</p>
-                    {photoPreview.exercise.adaptation && (
-                      <p className="text-xs font-semibold text-amber-300">
-                        Adaptação: {photoPreview.exercise.adaptation}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
             {(() => {
               const tvSession = effectivePlan?.sessions.find((s) => s.id === tvSessionId) as WorkoutSession | undefined;
               if (!tvSession) return null;

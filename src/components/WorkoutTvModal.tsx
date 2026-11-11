@@ -15,7 +15,6 @@ import {
   X,
 } from 'lucide-react';
 import type { WorkoutSession } from '../lib/exercise';
-import { exercisePhotoUrl } from '../lib/exercise';
 import type { ExerciseVideo } from '../lib/types';
 import { videoEmbedUrl } from '../lib/videoLibrary';
 import { cn } from '../utils/cn';
@@ -65,7 +64,6 @@ export default function WorkoutTvModal({
   const matchedVideo = current ? findVideo(current.name) : undefined;
   const rawVideoUrl = current?.youtubeUrl || matchedVideo?.videoUrl;
   const embedUrl = rawVideoUrl ? videoEmbedUrl(rawVideoUrl) : null;
-  const photoUrl = current ? exercisePhotoUrl(current.name) : null;
 
   // Cronômetro de pausa
   const initialRest = current?.restSeconds ?? 60;
@@ -272,7 +270,7 @@ export default function WorkoutTvModal({
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-between gap-6 p-4 sm:p-8">
         <div className="grid gap-6 lg:grid-cols-12 items-start">
           {/* Detalhes do exercício atual em fonte gigante */}
-          <div className={cn('space-y-5', rawVideoUrl || photoUrl ? 'lg:col-span-7' : 'lg:col-span-8')}>
+          <div className={cn('space-y-5', rawVideoUrl ? 'lg:col-span-7' : 'lg:col-span-8')}>
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="rounded-full bg-cyan-500 px-3.5 py-1 text-xs sm:text-sm font-extrabold text-slate-950">
                 Exercício {exIndex + 1} de {exercises.length}
@@ -312,20 +310,8 @@ export default function WorkoutTvModal({
             </div>
           </div>
 
-          {/* Painel lateral: Foto ilustrativa ou Vídeo + Cronômetro de Pausa */}
-          <div className={cn('space-y-4', rawVideoUrl || photoUrl ? 'lg:col-span-5' : 'lg:col-span-4')}>
-            {photoUrl && (
-              <div className="overflow-hidden rounded-2xl border border-white/15 bg-slate-900 shadow-2xl">
-                <img
-                  src={photoUrl}
-                  alt={`Demonstração de ${current.name}`}
-                  className="w-full aspect-video object-cover"
-                />
-                <div className="bg-slate-900/95 px-4 py-2 text-[11px] font-semibold text-cyan-300">
-                  Demonstração visual do movimento
-                </div>
-              </div>
-            )}
+          {/* Painel lateral: Vídeo embutido (se houver) + Cronômetro de Pausa */}
+          <div className={cn('space-y-4', rawVideoUrl ? 'lg:col-span-5' : 'lg:col-span-4')}>
             {rawVideoUrl && (
               <div className="overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl">
                 <div className="aspect-video w-full">
