@@ -5,6 +5,8 @@ import type { ExerciseVideo, ExerciseVideoCategory } from '../../lib/types';
 import { EXERCISE_CATALOG, normalizeExerciseText } from '../../lib/exercise';
 import ExerciseLinker from '../ExerciseLinker';
 import {
+  deleteExerciseStorageFile,
+  extractExerciseStoragePath,
   loadExerciseVideos,
   saveExerciseVideos,
   uploadExerciseVideo,
@@ -38,6 +40,7 @@ export default function VideoManager() {
   const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
   const [extraExerciseText, setExtraExerciseText] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: 'info' | 'ok' | 'err'; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -66,6 +69,7 @@ export default function VideoManager() {
     setSelectedExercises([]);
     setExtraExerciseText('');
     setEditingId(null);
+    setConfirmDeleteId(null);
   }
 
   function startEdit(video: ExerciseVideo) {
@@ -196,9 +200,19 @@ export default function VideoManager() {
       ];
     }
 
+    const previousVideo = editingId ? videos.find((v) => v.id === editingId) : undefined;
+
     setBusy(true);
     try {
       await saveExerciseVideos(next);
+      if (previousVideo) {
+        if (previousVideo.videoUrl && previousVideo.videoUrl !== resolvedUrl) {
+          void deleteExerciseStorageFile(previousVideo.videoUrl);
+        }
+        if (previousVideo.thumbnailUrl && previousVideo.thumbnailUrl !== finalThumb) {
+          void deleteExerciseStorageFile(previousVideo.thumbnailUrl);
+        }
+      }
       setVideos(next);
       resetForm();
       setMessage({
@@ -214,11 +228,54 @@ export default function VideoManager() {
     }
   }
 
-  async function remove(id: string) {
-    const next = videos.filter((v) => v.id !== id);
-    await saveExerciseVideos(next);
-    setVideos(next);
-    if (editingId === id) resetForm();
+  async function handleDeleteFormVideo() {
+    const currentUrl = form.videoUrl.trim();
+    if (!currentUrl) return;
+
+    const savedVideo = editingId ? videos.find((v) => v.id === editingId) : undefined;
+    const isUnpublishedUpload =
+      Boolean(extractExerciseStoragePath(currentUrl)) && (!savedVideo || savedVideo.videoUrl !== currentUrl);
+
+    if (isUnpublishedUpload) {
+      setBusy(true);
+      try {
+        await deleteExerciseStorageFile(currentUrl);
+        patch({ videoUrl: '' });
+        setMessage({ kind: 'ok', text: 'Vídeo enviado apagado do servidor.' });
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    patch({ videoUrl: '' });
+    setMessage({
+      kind: 'info',
+      text:
+        savedVideo?.videoUrl === currentUrl
+          ? 'Vídeo removido do formulário. Envie outro e salve, ou use o botão "Apagar" na lista ao lado para excluir definitivamente.'
+          : 'Link de vídeo removido do formulário.',
+    });
+  }
+
+  async function remove(video: ExerciseVideo) {
+    setBusy(true);
+    try {
+      const next = videos.filter((v) => v.id !== video.id);
+      await saveExerciseVideos(next);
+      await Promise.all([
+        deleteExerciseStorageFile(video.videoUrl),
+        video.thumbnailUrl ? deleteExerciseStorageFile(video.thumbnailUrl) : Promise.resolve(false),
+      ]);
+      setVideos(next);
+      setConfirmDeleteId(null);
+      if (editingId === video.id) resetForm();
+      setMessage({ kind: 'ok', text: `Vídeo "${video.title}" apagado com sucesso.` });
+    } catch (e) {
+      setMessage({ kind: 'err', text: e instanceof Error ? e.message : 'Falha ao apagar o vídeo.' });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -364,6 +421,26 @@ export default function VideoManager() {
             </Field>
           </div>
 
+          {form.videoUrl.trim() && (
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/60">
+              <div className="flex min-w-0 items-center gap-2">
+                <Film className="h-4 w-4 shrink-0 text-cyan-600" />
+                <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  {extractExerciseStoragePath(form.videoUrl) ? 'Vídeo enviado do computador' : 'Link de vídeo preenchido'}
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleDeleteFormVideo()}
+                className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50 dark:bg-rose-950/60 dark:text-rose-300 dark:hover:bg-rose-900/60"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Apagar vídeo
+              </button>
+            </div>
+          )}
+
           <div className="mt-3">
             <Field label="Capa / Thumbnail (opcional)" hint="detectada do YouTube ou envie uma foto/imagem">
               <div className="flex flex-wrap items-center gap-2">
@@ -483,22 +560,54 @@ export default function VideoManager() {
                       {v.specialistName} · {v.durationMinutes} min
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => startEdit(v)}
-                    className="text-slate-400 hover:text-cyan-600 p-1"
-                    title="Vincular exercícios / Editar vídeo"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void remove(v.id)}
-                    className="text-slate-300 hover:text-rose-500 p-1"
-                    title="Excluir vídeo"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmDeleteId(null);
+                        startEdit(v);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 transition hover:border-cyan-400 hover:text-cyan-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      title="Vincular exercícios / Editar vídeo"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Editar
+                    </button>
+                    {confirmDeleteId === v.id ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void remove(v)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2 py-1 text-[11px] font-bold text-white transition hover:bg-rose-700 disabled:opacity-50"
+                          title="Confirmar exclusão definitiva"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          Confirmar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-bold text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-400"
+                          title="Cancelar exclusão"
+                        >
+                          Cancelar
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setConfirmDeleteId(v.id)}
+                        className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-600 transition hover:bg-rose-100 disabled:opacity-50 dark:bg-rose-950/60 dark:text-rose-300 dark:hover:bg-rose-900/60"
+                        title="Apagar vídeo publicado"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Apagar
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {v.exerciseNames?.length > 0 ? (

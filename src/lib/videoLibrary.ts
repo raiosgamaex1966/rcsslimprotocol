@@ -88,6 +88,33 @@ export async function uploadExerciseVideo(file: File): Promise<string> {
   return supabase!.storage.from('exercise-videos').getPublicUrl(path).data.publicUrl;
 }
 
+const STORAGE_PUBLIC_PREFIX = '/storage/v1/object/public/exercise-videos/';
+
+/** Extrai o caminho do objeto no bucket `exercise-videos` a partir da URL pública. */
+export function extractExerciseStoragePath(publicUrl: string): string | null {
+  if (!publicUrl || !publicUrl.includes(STORAGE_PUBLIC_PREFIX)) return null;
+  const rawPath = publicUrl.split(STORAGE_PUBLIC_PREFIX)[1]?.split('?')[0]?.trim();
+  if (!rawPath) return null;
+  try {
+    return decodeURIComponent(rawPath);
+  } catch {
+    return rawPath;
+  }
+}
+
+/** Remove um vídeo ou miniatura enviada anteriormente para o bucket `exercise-videos`. */
+export async function deleteExerciseStorageFile(publicUrl: string): Promise<boolean> {
+  const objectPath = extractExerciseStoragePath(publicUrl);
+  if (!objectPath) return false;
+  if (!isSupabaseConfigured || !supabase) return true;
+  try {
+    const { error } = await supabase.storage.from('exercise-videos').remove([objectPath]);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 /** Upload para imagem de capa (thumbnail) no Supabase storage */
 export async function uploadExerciseThumbnail(file: File): Promise<string> {
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
