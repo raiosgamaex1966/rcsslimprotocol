@@ -6,6 +6,8 @@ import {
   BellRing,
   CalendarClock,
   CheckCircle2,
+  Eye,
+  EyeOff,
   FlaskConical,
   ClipboardList,
   History,
@@ -474,6 +476,25 @@ export default function Dashboard() {
     }));
   }
   const [aiGuidanceBusy, setAiGuidanceBusy] = useState(false);
+  const [hideAiNote, setHideAiNote] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('hideAiGuidanceNote') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  function toggleHideAiNote() {
+    setHideAiNote((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('hideAiGuidanceNote', String(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  }
 
   async function handleRegenerateAiGuidance() {
     if (!treatment || !data?.profile) return;
@@ -1043,36 +1064,58 @@ Dieta fracionada, redução de gorduras/frituras. Hidratação afastada das gran
                     
                     {/* Nota da IA */}
                     <div className="relative mt-5 border-t border-white/10 pt-4">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
                           <Sparkles className="h-3 w-3 text-brand-400" /> Nota da IA para o paciente
                         </p>
-                        <button
-                          type="button"
-                          onClick={handleRegenerateAiGuidance}
-                          disabled={aiGuidanceBusy}
-                          className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-300 hover:text-brand-200 transition-colors"
-                        >
-                          {aiGuidanceBusy ? (
-                            <LoaderCircle className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Sparkles className="h-3 w-3" />
+                        <div className="flex items-center gap-3">
+                          {!hideAiNote && (
+                            <button
+                              type="button"
+                              onClick={handleRegenerateAiGuidance}
+                              disabled={aiGuidanceBusy}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-300 hover:text-brand-200 transition-colors"
+                            >
+                              {aiGuidanceBusy ? (
+                                <LoaderCircle className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-3 w-3" />
+                              )}
+                              {treatment.aiGuidanceNote && !treatment.aiGuidanceNote.includes('Habilite a Inteligência')
+                                ? 'Atualizar recomendação'
+                                : 'Gerar recomendação com IA'}
+                            </button>
                           )}
-                          {treatment.aiGuidanceNote && !treatment.aiGuidanceNote.includes('Habilite a Inteligência')
-                            ? 'Atualizar recomendação'
-                            : 'Gerar recomendação com IA'}
-                        </button>
+                          <button
+                            type="button"
+                            onClick={toggleHideAiNote}
+                            className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1 text-[10px] font-bold text-slate-300 hover:bg-white/15 hover:text-white transition-colors"
+                            title={hideAiNote ? 'Mostrar nota da IA' : 'Ocultar nota da IA'}
+                          >
+                            {hideAiNote ? (
+                              <>
+                                <Eye className="h-3 w-3" /> Mostrar nota
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff className="h-3 w-3" /> Ocultar nota
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-3 text-xs leading-relaxed text-slate-300 space-y-2 whitespace-pre-wrap">
-                        {aiGuidanceBusy ? (
-                          <div className="flex items-center gap-2 text-slate-400 italic py-2">
-                            <LoaderCircle className="h-3.5 w-3.5 animate-spin text-brand-400" />
-                            A Inteligência Artificial está formulando sua orientação clínica personalizada...
-                          </div>
-                        ) : (
-                          treatment.aiGuidanceNote || 'Toque em "Gerar recomendação com IA" para receber orientações clínicas sobre sua dose atual.'
-                        )}
-                      </div>
+                      {!hideAiNote && (
+                        <div className="mt-3 text-xs leading-relaxed text-slate-300 space-y-2 whitespace-pre-wrap">
+                          {aiGuidanceBusy ? (
+                            <div className="flex items-center gap-2 text-slate-400 italic py-2">
+                              <LoaderCircle className="h-3.5 w-3.5 animate-spin text-brand-400" />
+                              A Inteligência Artificial está formulando sua orientação clínica personalizada...
+                            </div>
+                          ) : (
+                            treatment.aiGuidanceNote || 'Toque em "Gerar recomendação com IA" para receber orientações clínicas sobre sua dose atual.'
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 

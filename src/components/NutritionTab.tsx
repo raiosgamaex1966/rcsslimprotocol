@@ -48,6 +48,20 @@ function todayIndex(): number {
   return (new Date().getDay() + 6) % 7;
 }
 
+function localDateString(d = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function dateForDayIndex(idx: number): string {
+  const now = new Date();
+  const curIdx = (now.getDay() + 6) % 7;
+  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (idx - curIdx));
+  return localDateString(target);
+}
+
 export default function NutritionTab({ userId, data, update }: Props) {
   const profile: Profile | undefined = data.profile;
   const treatment = data.treatment;
@@ -153,28 +167,29 @@ export default function NutritionTab({ userId, data, update }: Props) {
     ? serverAiConfigured
     : Boolean(llmCfg?.enabled);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const todayLog = nutritionLogs.find((n) => n.date === today);
-  const consumedStandardMealIds = todayLog?.meals ?? [];
-  const customMealsToday = todayLog?.customMeals ?? [];
+  const selectedDate = dateForDayIndex(dayIdx);
+  const isTodaySelected = dayIdx === todayIndex();
+  const selectedLog = nutritionLogs.find((n) => n.date === selectedDate);
+  const consumedStandardMealIds = selectedLog?.meals ?? [];
+  const customMealsToday = selectedLog?.customMeals ?? [];
 
   const dayName = days[dayIdx]?.dayName ?? '';
 
   function toggleMeal(mealId: MealId) {
     update((prev) => {
       const logsArr = prev.nutritionLogs ?? [];
-      const existing = logsArr.find((n) => n.date === today);
+      const existing = logsArr.find((n) => n.date === selectedDate);
       const meals = new Set(existing?.meals ?? []);
       if (meals.has(mealId)) meals.delete(mealId);
       else meals.add(mealId);
       const nextLog = {
-        date: today,
+        date: selectedDate,
         meals: Array.from(meals),
         customMeals: existing?.customMeals ?? [],
       };
       return {
         ...prev,
-        nutritionLogs: [...logsArr.filter((n) => n.date !== today), nextLog],
+        nutritionLogs: [...logsArr.filter((n) => n.date !== selectedDate), nextLog],
       };
     });
   }
@@ -214,16 +229,16 @@ export default function NutritionTab({ userId, data, update }: Props) {
 
     update((prev) => {
       const logsArr = prev.nutritionLogs ?? [];
-      const existing = logsArr.find((n) => n.date === today);
+      const existing = logsArr.find((n) => n.date === selectedDate);
       const nextCustom = [...(existing?.customMeals ?? []), newEntry];
       const nextLog = {
-        date: today,
+        date: selectedDate,
         meals: existing?.meals ?? [],
         customMeals: nextCustom,
       };
       return {
         ...prev,
-        nutritionLogs: [...logsArr.filter((n) => n.date !== today), nextLog],
+        nutritionLogs: [...logsArr.filter((n) => n.date !== selectedDate), nextLog],
       };
     });
 
@@ -234,7 +249,7 @@ export default function NutritionTab({ userId, data, update }: Props) {
   function handleDeleteCustomMeal(id: string) {
     update((prev) => {
       const logsArr = prev.nutritionLogs ?? [];
-      const existing = logsArr.find((n) => n.date === today);
+      const existing = logsArr.find((n) => n.date === selectedDate);
       if (!existing) return prev;
       const nextCustom = (existing.customMeals ?? []).filter((m) => m.id !== id);
       const nextLog = {
@@ -243,7 +258,7 @@ export default function NutritionTab({ userId, data, update }: Props) {
       };
       return {
         ...prev,
-        nutritionLogs: [...logsArr.filter((n) => n.date !== today), nextLog],
+        nutritionLogs: [...logsArr.filter((n) => n.date !== selectedDate), nextLog],
       };
     });
   }
@@ -402,7 +417,7 @@ export default function NutritionTab({ userId, data, update }: Props) {
         <Card className="p-5">
           <SectionTitle
             icon={<Beef className="h-4 w-4 text-emerald-600" />}
-            title="Proteína consumida hoje"
+            title={isTodaySelected ? 'Proteína consumida hoje' : `Proteína consumida (${DAY_LABELS[dayIdx]})`}
             subtitle={`${totalProteinEaten} g de ${targets.proteinG} g (${proteinPct}%)`}
             action={
               <Badge className={cn(proteinPct >= 90 ? 'bg-emerald-100 text-emerald-700' : proteinPct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700')}>
@@ -426,7 +441,7 @@ export default function NutritionTab({ userId, data, update }: Props) {
         <Card className="p-5">
           <SectionTitle
             icon={<Salad className="h-4 w-4 text-teal-600" />}
-            title="Fibras consumidas hoje"
+            title={isTodaySelected ? 'Fibras consumidas hoje' : `Fibras consumidas (${DAY_LABELS[dayIdx]})`}
             subtitle={`${totalFiberEaten} g de ${targets.fiberG} g (${fiberPct}%)`}
             action={
               <Badge className={cn(fiberPct >= 80 ? 'bg-emerald-100 text-emerald-700' : 'bg-teal-100 text-teal-700')}>

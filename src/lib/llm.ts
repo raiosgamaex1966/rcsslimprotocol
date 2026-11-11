@@ -1338,3 +1338,124 @@ RETORNE ESTRITAMENTE JSON PURO (sem markdown nem explicações), seguindo o mode
     return parsePrescribedPlanFallback(cleanText, targets);
   }
 }
+
+export interface ExtractedMealPlanDocument {
+  success: boolean;
+  mealPlanTitle?: string;
+  mealPlanText?: string;
+  proteinG?: number;
+  kcal?: number;
+  fiberG?: number;
+  error?: string;
+}
+
+/**
+ * Converte o texto ou as imagens de um PDF/foto de plano alimentar prescrito pelo nutricionista
+ * em título, detalhamento limpo das refeições (preservando quantidades e substituições) e metas opcionais.
+ */
+export async function extractMealPlanFromDocument(
+  cfg: LLMConfig | null,
+  input: {
+    extractedText?: string;
+    images?: Array<{ data: string; mimeType: string }>;
+    fileName?: string;
+  }
+): Promise<ExtractedMealPlanDocument> {
+  const activeCfg: LLMConfig = cfg?.enabled
+    ? cfg
+    : {
+        provider: 'openrouter',
+        apiKey: 'configured_on_server',
+        model: 'openai/gpt-4o-mini',
+        enabled: true,
+      };
+
+  const rawText = (input.extractedText ?? '').trim();
+  const images = input.images ?? [];
+  const defaultTitle = input.fileName
+    ? input.fileName.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim()
+    : 'Plano Alimentar Prescrito';
+
+  const instructions = `Você é um nutricionista especialista em extração e estruturação de planos alimentares clínicos (GLP-1/emagrecimento).
+Analise o plano alimentar enviado ${rawText ? '(texto extraído do PDF)' : '(imagens das páginas do plano alimentar)'} e extraia fielmente todas as refeições, horários, alimentos, quantidades e substituições permitidas.
+
+REGRAS OBRIGATÓRIAS:
+1. Preserve 100% das quantidades, medidas caseiras, gramagens, horários e opções de substituição descritas pelo nutricionista. NÃO invente alimentos nem altere porções.
+2. Em "mealPlanText", organize uma linha por refeição no padrão claro:
+• Café da manhã (07:30): alimento 1 + alimento 2 (ou opção substituta...)
+• Colação (10:00): ...
+• Almoço (12:30): ...
+• Lanche da tarde (16:00): ...
+• Jantar (19:30): ...
+• Ceia (21:30): ... (se houver no documento)
+Inclua observações nutricionais relevantes ao final, se existirem no documento.
+3. Em "mealPlanTitle", crie ou transcreva um título curto e fiel ao documento (ex: "Plano Alimentar Fase 1 — High Protein").
+4. Se o documento informar explicitamente metas diárias totais de proteína (g), calorias (kcal) ou fibras (g), preencha proteinG, kcal e fiberG com números inteiros; caso contrário use null.
+
+RESPONDA ESTRITAMENTE EM JSON PURO (sem markdown extra):
+{
+  "mealPlanTitle": "Título do Plano",
+  "mealPlanText": "• Café da manhã (07:30): ...",
+  "proteinG": null,
+  "kcal": null,
+  "fiberG": null
+}`;
+
+  try {
+    let rawResponse = '';
+    if (rawText.length >= 40) {
+      rawResponse = await requestLLM(
+        activeCfg,
+        `${instructions}\n\nTEXTO EXTRAÍDO DO DOCUMENTO:\n${rawText.slice(0, 14000)}`,
+        3500
+      );
+    } else if (images.length > 0) {
+      rawResponse = await requestLLMVisionMultiple(activeCfg, instructions, images, 3500);
+    } else {
+      return { success: false, error: 'Nenhum conteúdo legível foi encontrado no arquivo.' };
+    }
+
+    const repaired = repairTruncatedJSON(rawResponse);
+    const s = repaired.indexOf('{');
+    const e = repaired.lastIndexOf('}');
+    if (s !== -1 && e > s) {
+      const parsed = JSON.parse(repaired.slice(s, e + 1));
+      const extractedPlanText = typeof parsed.mealPlanText === 'string' ? parsed.mealPlanText.trim() : '';
+      if (extractedPlanText) {
+        return {
+          success: true,
+          mealPlanTitle: typeof parsed.mealPlanTitle === 'string' && parsed.mealPlanTitle.trim() ? parsed.mealPlanTitle.trim() : defaultTitle,
+          mealPlanText: extractedPlanText,
+          proteinG: typeof parsed.proteinG === 'number' && parsed.proteinG > 0 ? Math.round(parsed.proteinG) : undefined,
+          kcal: typeof parsed.kcal === 'number' && parsed.kcal > 0 ? Math.round(parsed.kcal) : undefined,
+          fiberG: typeof parsed.fiberG === 'number' && parsed.fiberG > 0 ? Math.round(parsed.fiberG) : undefined,
+        };
+      }
+    }
+  } catch (err: any) {
+    if (rawText.length >= 40) {
+      return {
+        success: true,
+        mealPlanTitle: defaultTitle,
+        mealPlanText: rawText,
+      };
+    }
+    return {
+      success: false,
+      error: err?.message || 'Não foi possível ler o PDF/imagem com a IA.',
+    };
+  }
+
+  if (rawText.length >= 40) {
+    return {
+      success: true,
+      mealPlanTitle: defaultTitle,
+      mealPlanText: rawText,
+    };
+  }
+
+  return {
+    success: false,
+    error: 'A IA não conseguiu estruturar as refeições deste arquivo.',
+  };
+}

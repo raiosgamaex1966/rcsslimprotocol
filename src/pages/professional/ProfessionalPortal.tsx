@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Dumbbell,
   FileText,
+  FileUp,
   FlaskConical,
   HeartPulse,
   History,
@@ -59,7 +60,8 @@ import {
   treatmentWeek,
   weeklyWeightTrend,
 } from '../../lib/schedule';
-import { adaptPrescribedMealPlanWithAI, computeTargets, getLLMConfig } from '../../lib/llm';
+import { adaptPrescribedMealPlanWithAI, computeTargets, extractMealPlanFromDocument, getLLMConfig } from '../../lib/llm';
+import { extractPdfOrImages } from '../../lib/pdfExtractor';
 import type { ClinicalRecommendation, DayMenu, PatientData, PatientLink } from '../../lib/types';
 import { cn } from '../../utils/cn';
 
@@ -812,10 +814,24 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
   const [mealPlanText, setMealPlanText] = useState(data.nutritionOverride?.mealPlanText ?? '');
   const [savedOverride, setSavedOverride] = useState(false);
   const [adaptingPlan, setAdaptingPlan] = useState(false);
+  const [importingFile, setImportingFile] = useState(false);
+  const [importStatus, setImportStatus] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const [previewDayIdx, setPreviewDayIdx] = useState(0);
 
-  async function handleSaveMealPlan() {
-    const trimmedText = mealPlanText.trim();
+  async function saveAndAdaptMealPlan(params?: {
+    title?: string;
+    text?: string;
+    protein?: string;
+    kcal?: string;
+    fiber?: string;
+  }) {
+    const nextTitle = (params?.title ?? mealPlanTitle).trim();
+    const trimmedText = (params?.text ?? mealPlanText).trim();
+    const nextProt = params?.protein ?? proteinOverride;
+    const nextKcal = params?.kcal ?? kcalOverride;
+    const nextFiber = params?.fiber ?? fiberOverride;
+
     const base = targets ?? {
       proteinG: 120,
       proteinPerKg: 1.4,
@@ -829,9 +845,9 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
 
     const adjustedTargets = {
       ...base,
-      proteinG: proteinOverride.trim() ? Number(proteinOverride) : base.proteinG,
-      kcal: kcalOverride.trim() ? Number(kcalOverride) : base.kcal,
-      fiberG: fiberOverride.trim() ? Number(fiberOverride) : base.fiberG,
+      proteinG: nextProt.trim() ? Number(nextProt) : base.proteinG,
+      kcal: nextKcal.trim() ? Number(nextKcal) : base.kcal,
+      fiberG: nextFiber.trim() ? Number(nextFiber) : base.fiberG,
     };
 
     setAdaptingPlan(true);
@@ -857,10 +873,10 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
       ...prev,
       nutritionOverride: {
         ...prev.nutritionOverride,
-        proteinG: proteinOverride.trim() ? Number(proteinOverride) : undefined,
-        kcal: kcalOverride.trim() ? Number(kcalOverride) : undefined,
-        fiberG: fiberOverride.trim() ? Number(fiberOverride) : undefined,
-        mealPlanTitle: mealPlanTitle.trim() || undefined,
+        proteinG: nextProt.trim() ? Number(nextProt) : undefined,
+        kcal: nextKcal.trim() ? Number(nextKcal) : undefined,
+        fiberG: nextFiber.trim() ? Number(nextFiber) : undefined,
+        mealPlanTitle: nextTitle || undefined,
         mealPlanText: trimmedText || undefined,
         structuredDays,
         authorName: professionalName,
@@ -869,6 +885,61 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
     }));
     setSavedOverride(true);
     window.setTimeout(() => setSavedOverride(false), 3500);
+  }
+
+  async function handlePlanFileUpload(files: FileList | File[] | null) {
+    if (!files || files.length === 0) return;
+    setImportingFile(true);
+    setImportStatus(null);
+    const firstFile = Array.from(files)[0];
+    try {
+      const content = await extractPdfOrImages(files);
+      const extracted = await extractMealPlanFromDocument(getLLMConfig(), {
+        extractedText: content.extractedText,
+        images: content.images,
+        fileName: firstFile.name,
+      });
+
+      if (!extracted.success || !extracted.mealPlanText) {
+        setImportStatus({
+          kind: 'err',
+          msg: extracted.error || 'Não foi possível extrair o plano alimentar deste arquivo.',
+        });
+        return;
+      }
+
+      const nextTitle = extracted.mealPlanTitle || mealPlanTitle || 'Plano Alimentar Prescrito';
+      const nextText = extracted.mealPlanText;
+      const nextProt = extracted.proteinG ? String(extracted.proteinG) : proteinOverride;
+      const nextKcal = extracted.kcal ? String(extracted.kcal) : kcalOverride;
+      const nextFiber = extracted.fiberG ? String(extracted.fiberG) : fiberOverride;
+
+      setMealPlanTitle(nextTitle);
+      setMealPlanText(nextText);
+      if (extracted.proteinG) setProteinOverride(nextProt);
+      if (extracted.kcal) setKcalOverride(nextKcal);
+      if (extracted.fiberG) setFiberOverride(nextFiber);
+
+      await saveAndAdaptMealPlan({
+        title: nextTitle,
+        text: nextText,
+        protein: nextProt,
+        kcal: nextKcal,
+        fiber: nextFiber,
+      });
+
+      setImportStatus({
+        kind: 'ok',
+        msg: `Arquivo "${firstFile.name}" (${content.pageCount} pág.) convertido com sucesso em cardápio semanal e ativado no app do paciente!`,
+      });
+    } catch (err: any) {
+      setImportStatus({
+        kind: 'err',
+        msg: err?.message || 'Falha ao ler o arquivo PDF/imagem.',
+      });
+    } finally {
+      setImportingFile(false);
+    }
   }
   const nutritionLogs = data.nutritionLogs ?? [];
   const recentCompliance = nutritionLogs.slice(-7);
@@ -927,6 +998,85 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
           subtitle="Aparecerá com destaque oficial na tela do paciente"
         />
         <div className="space-y-4">
+          {/* Upload de PDF / Foto do Plano Alimentar */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+              void handlePlanFileUpload(e.dataTransfer.files);
+            }}
+            className={cn(
+              'rounded-2xl border-2 border-dashed p-4 transition-colors',
+              dragActive
+                ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/40'
+                : 'border-emerald-200 bg-emerald-50/35 hover:border-emerald-400 dark:border-emerald-800/60 dark:bg-emerald-950/15'
+            )}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white shadow-sm">
+                  {importingFile ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <FileUp className="h-5 w-5" />}
+                </span>
+                <div>
+                  <p className="text-xs font-extrabold text-slate-900 dark:text-white">
+                    Importar Plano Alimentar por PDF ou Foto (IA)
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                    Envie o PDF do seu computador (ou arraste aqui) e a IA transforma automaticamente no cardápio de 7 dias do paciente.
+                  </p>
+                </div>
+              </div>
+              <label
+                className={cn(
+                  'inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold shadow-sm transition-colors',
+                  importingFile || adaptingPlan
+                    ? 'pointer-events-none bg-slate-200 text-slate-500 dark:bg-slate-800'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                )}
+              >
+                {importingFile ? (
+                  <>
+                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Lendo PDF e montando cardápio...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-3.5 w-3.5" /> Selecionar PDF ou Imagem
+                  </>
+                )}
+                <input
+                  type="file"
+                  accept="application/pdf,.pdf,image/*"
+                  multiple
+                  disabled={importingFile || adaptingPlan}
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    void handlePlanFileUpload(files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+            {importStatus && (
+              <div
+                className={cn(
+                  'mt-3 rounded-xl px-3 py-2 text-xs font-semibold',
+                  importStatus.kind === 'ok'
+                    ? 'bg-emerald-100/80 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
+                    : 'bg-rose-100/80 text-rose-700 dark:bg-rose-950/60 dark:text-rose-200'
+                )}
+              >
+                {importStatus.kind === 'ok' ? '✓ ' : '⚠️ '}
+                {importStatus.msg}
+              </div>
+            )}
+          </div>
+
           <Field label="Título do Plano Alimentar (ex: Dieta de Adaptação GLP-1)" required>
             <TextInput
               placeholder="Ex: Protocolo Nutricional Fase 1 — Foco em Proteínas e Saciedade"
@@ -952,8 +1102,8 @@ function NutricionistaView({ data, professionalName, update }: { data: PatientDa
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button
             className="!px-5 !py-2.5 text-xs font-bold"
-            disabled={adaptingPlan}
-            onClick={() => void handleSaveMealPlan()}
+            disabled={adaptingPlan || importingFile}
+            onClick={() => void saveAndAdaptMealPlan()}
           >
             {adaptingPlan ? (
               <>
