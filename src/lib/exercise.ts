@@ -40,6 +40,7 @@ interface ExerciseTemplate extends PlannedExercise {
 const EXERCISES: ExerciseTemplate[] = [
   { name: 'Tai Chi sentado: abrir e fechar', sets: 2, reps: '6 ciclos lentos', restSeconds: 30, instructions: 'Sentado em cadeira firme, abra os braços ao inspirar e aproxime ao expirar, sem prender a respiração.', adaptation: 'Mantenha os pés apoiados e reduza a amplitude dos ombros.', tags: ['tai_chi', 'mobilidade', 'equilibrio', 'cadeira'], avoid: [] },
   { name: 'Tai Chi sentado: empurrar as nuvens', sets: 2, reps: '1 minuto', restSeconds: 30, instructions: 'Mova as mãos lentamente de um lado para o outro, acompanhando com os olhos e mantendo o tronco confortável.', adaptation: 'Faça um braço por vez se houver limitação no ombro.', tags: ['tai_chi', 'mobilidade', 'equilibrio', 'cadeira'], avoid: [] },
+  { name: 'Tai Chi: respiração e elevação suave dos braços', sets: 2, reps: '6 ciclos lentos', restSeconds: 30, instructions: 'Em pé ao lado da cadeira ou sentado, inspire elevando as mãos devagar até a altura do peito com ombros relaxados e expire descendo suavemente.', adaptation: 'Use a cadeira ao lado para equilíbrio ou faça todo o movimento sentado.', tags: ['tai_chi', 'mobilidade', 'equilibrio', 'cadeira'], avoid: [] },
   { name: 'Marcha sentada', sets: 3, reps: '45 segundos', restSeconds: 30, instructions: 'Sentado próximo ao encosto, eleve um pé de cada vez sem gerar dor no joelho.', adaptation: 'Eleve poucos centímetros e use ritmo lento.', tags: ['cardio', 'pernas', 'cadeira'], avoid: [] },
   { name: 'Remada sentada com toalha', sets: 2, reps: '10 a 12', restSeconds: 45, instructions: 'Sentado, segure a toalha à frente e puxe as mãos para os lados, aproximando as escápulas.', tags: ['superior', 'cadeira'], avoid: ['ombro_agudo'] },
   { name: 'Elevação de calcanhares sentado', sets: 3, reps: '12 a 15', restSeconds: 30, instructions: 'Com os pés apoiados, eleve os calcanhares e retorne lentamente.', tags: ['pernas', 'cadeira'], avoid: [] },
@@ -208,16 +209,17 @@ export function cacheWorkout(userId: string, a: PhysicalAssessment, weightKg: nu
 }
 
 
-/** Retorna link direto do vídeo (se houver) ou busca exata de execução correta no YouTube. */
-export function exerciseYoutubeUrl(
-  exercise: { name: string; youtubeUrl?: string },
-  libraryVideoUrl?: string,
-): string {
-  const direct = exercise.youtubeUrl || libraryVideoUrl;
-  if (direct && /(youtube\.com|youtu\.be)/i.test(direct)) {
-    return direct;
+/** Retorna a foto demonstrativa local para exercícios (especialmente Tai Chi). */
+export function exercisePhotoUrl(exerciseName: string): string | null {
+  const norm = exerciseName.toLocaleLowerCase('pt-BR');
+  if (norm.includes('abrir e fechar')) {
+    return '/images/exercises/tai-chi-abrir-fechar.jpg';
   }
-  return `https://www.youtube.com/results?search_query=${encodeURIComponent(
-    `como fazer ${exercise.name} exercício execução correta`,
-  )}`;
+  if (norm.includes('empurrar as nuvens') || norm.includes('nuvens')) {
+    return '/images/exercises/tai-chi-empurrar-nuvens.jpg';
+  }
+  if (norm.includes('tai chi') || norm.includes('tai-chi') || norm.includes('taichi')) {
+    return '/images/exercises/tai-chi-geral.jpg';
+  }
+  return null;
 }

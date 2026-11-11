@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Clock3,
   Copy,
-  ExternalLink,
   Maximize2,
   Minimize2,
   Pause,
@@ -13,11 +12,10 @@ import {
   RotateCcw,
   Share2,
   Tv,
-  Video,
   X,
 } from 'lucide-react';
 import type { WorkoutSession } from '../lib/exercise';
-import { exerciseYoutubeUrl } from '../lib/exercise';
+import { exercisePhotoUrl } from '../lib/exercise';
 import type { ExerciseVideo } from '../lib/types';
 import { videoEmbedUrl } from '../lib/videoLibrary';
 import { cn } from '../utils/cn';
@@ -67,7 +65,7 @@ export default function WorkoutTvModal({
   const matchedVideo = current ? findVideo(current.name) : undefined;
   const rawVideoUrl = current?.youtubeUrl || matchedVideo?.videoUrl;
   const embedUrl = rawVideoUrl ? videoEmbedUrl(rawVideoUrl) : null;
-  const youtubeLink = current ? exerciseYoutubeUrl(current, matchedVideo?.videoUrl) : 'https://www.youtube.com';
+  const photoUrl = current ? exercisePhotoUrl(current.name) : null;
 
   // Cronômetro de pausa
   const initialRest = current?.restSeconds ?? 60;
@@ -136,11 +134,7 @@ export default function WorkoutTvModal({
       `📺 Treino: ${session.dayName} — ${session.title}`,
       `Foco: ${session.focus} · ${session.durationMinutes} min`,
       '',
-      ...exercises.map((ex, i) => {
-        const lib = findVideo(ex.name);
-        const link = exerciseYoutubeUrl(ex, lib?.videoUrl);
-        return `${i + 1}. ${ex.name} (${ex.sets}x ${ex.reps})\n   ▶ YouTube: ${link}`;
-      }),
+      ...exercises.map((ex, i) => `${i + 1}. ${ex.name} (${ex.sets}x ${ex.reps}) — ${ex.instructions}`),
     ];
     const shareText = lines.join('\n');
 
@@ -253,21 +247,21 @@ export default function WorkoutTvModal({
         <div className="border-b border-cyan-500/30 bg-cyan-950/60 px-4 py-3 sm:px-8 text-xs text-cyan-100">
           <div className="mx-auto max-w-6xl grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl bg-white/5 p-3">
-              <p className="font-extrabold text-cyan-300">1. Pelo aplicativo YouTube (Smart TV)</p>
+              <p className="font-extrabold text-cyan-300">1. Pelo Google Chrome (Computador/Android)</p>
               <p className="mt-1 text-slate-300 leading-relaxed">
-                Toque em <b>&ldquo;Abrir no YouTube&rdquo;</b> no exercício abaixo e aperte o ícone de <b>Transmitir (📺)</b> no topo do vídeo do YouTube para enviar direto à sua Smart TV ou Chromecast.
+                Clique em <b>Tela Cheia</b> aqui em cima, abra o menu <b>⋮</b> do Chrome → <b>Transmitir, salvar e compartilhar → Transmitir</b> e selecione sua Smart TV.
               </p>
             </div>
             <div className="rounded-xl bg-white/5 p-3">
-              <p className="font-extrabold text-cyan-300">2. Pelo Google Chrome (Computador/Android)</p>
+              <p className="font-extrabold text-cyan-300">2. Pelo Celular (Smart View / AirPlay)</p>
               <p className="mt-1 text-slate-300 leading-relaxed">
-                Clique em <b>Tela Cheia</b> aqui em cima, abra o menu <b>⋮</b> do Chrome → <b>Transmitir, salvar e compartilhar → Transmitir</b> e selecione sua TV.
+                Ative <b>Espelhar Tela / Smart View</b> (Android) ou <b>Espelhamento AirPlay</b> (iPhone) e deixe o Modo TV em tela cheia horizontal para ver fotos e textos grandes na TV.
               </p>
             </div>
             <div className="rounded-xl bg-white/5 p-3">
-              <p className="font-extrabold text-cyan-300">3. iPhone (AirPlay) ou WhatsApp na TV</p>
+              <p className="font-extrabold text-cyan-300">3. Abrir direto no navegador da TV</p>
               <p className="mt-1 text-slate-300 leading-relaxed">
-                Use <b>Espelhar Tela / Smart View</b> no celular, ou clique em <b>Compartilhar c/ links</b> para enviar os exercícios com links do YouTube para abrir na TV ou tablet.
+                Clique em <b>Compartilhar treino</b> para enviar a ficha para outro dispositivo ou acesse este app direto pelo navegador da sua Smart TV.
               </p>
             </div>
           </div>
@@ -278,7 +272,7 @@ export default function WorkoutTvModal({
       <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-between gap-6 p-4 sm:p-8">
         <div className="grid gap-6 lg:grid-cols-12 items-start">
           {/* Detalhes do exercício atual em fonte gigante */}
-          <div className={cn('space-y-5', rawVideoUrl ? 'lg:col-span-7' : 'lg:col-span-8')}>
+          <div className={cn('space-y-5', rawVideoUrl || photoUrl ? 'lg:col-span-7' : 'lg:col-span-8')}>
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="rounded-full bg-cyan-500 px-3.5 py-1 text-xs sm:text-sm font-extrabold text-slate-950">
                 Exercício {exIndex + 1} de {exercises.length}
@@ -316,25 +310,22 @@ export default function WorkoutTvModal({
                 </p>
               )}
             </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <a
-                href={youtubeLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-5 py-3.5 text-sm sm:text-base font-extrabold text-white shadow-lg shadow-red-600/30 hover:bg-red-500 transition-colors"
-              >
-                <Video className="h-5 w-5" />
-                {rawVideoUrl && /(youtube\.com|youtu\.be)/i.test(rawVideoUrl)
-                  ? 'Abrir vídeo no YouTube (Transmitir p/ TV)'
-                  : 'Assistir execução no YouTube (Transmitir p/ TV)'}
-                <ExternalLink className="h-4 w-4 opacity-80" />
-              </a>
-            </div>
           </div>
 
-          {/* Painel lateral: Vídeo embutido (se houver) + Cronômetro de Pausa */}
-          <div className={cn('space-y-4', rawVideoUrl ? 'lg:col-span-5' : 'lg:col-span-4')}>
+          {/* Painel lateral: Foto ilustrativa ou Vídeo + Cronômetro de Pausa */}
+          <div className={cn('space-y-4', rawVideoUrl || photoUrl ? 'lg:col-span-5' : 'lg:col-span-4')}>
+            {photoUrl && (
+              <div className="overflow-hidden rounded-2xl border border-white/15 bg-slate-900 shadow-2xl">
+                <img
+                  src={photoUrl}
+                  alt={`Demonstração de ${current.name}`}
+                  className="w-full aspect-video object-cover"
+                />
+                <div className="bg-slate-900/95 px-4 py-2 text-[11px] font-semibold text-cyan-300">
+                  Demonstração visual do movimento
+                </div>
+              </div>
+            )}
             {rawVideoUrl && (
               <div className="overflow-hidden rounded-2xl border border-white/15 bg-black shadow-2xl">
                 <div className="aspect-video w-full">
