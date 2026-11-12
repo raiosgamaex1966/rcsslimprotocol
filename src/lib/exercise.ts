@@ -28,7 +28,7 @@ export interface WorkoutSession {
 export interface WorkoutPlan {
   sessions: WorkoutSession[];
   weeklyMinutes: number;
-  source: 'adaptativo' | 'ia';
+  source: 'adaptativo' | 'ia' | 'personal';
   safetyNote: string;
 }
 
@@ -213,6 +213,11 @@ export interface ExerciseCatalogItem {
   name: string;
   category: 'forca' | 'caminhada' | 'mobilidade' | 'equilibrio' | 'tai_chi' | 'alongamento';
   suggestedTags: string[];
+  sets: number;
+  reps: string;
+  restSeconds: number;
+  instructions: string;
+  adaptation?: string;
 }
 
 function inferCatalogCategory(tags: string[]): ExerciseCatalogItem['category'] {
@@ -237,6 +242,11 @@ export const EXERCISE_CATALOG: ExerciseCatalogItem[] = EXERCISES.map((ex) => ({
   name: ex.name,
   category: inferCatalogCategory(ex.tags),
   suggestedTags: inferSuggestedTags(ex.tags),
+  sets: ex.sets,
+  reps: ex.reps,
+  restSeconds: ex.restSeconds,
+  instructions: ex.instructions,
+  adaptation: ex.adaptation,
 }));
 
 export function normalizeExerciseText(text: string): string {

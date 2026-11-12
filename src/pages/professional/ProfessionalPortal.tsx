@@ -21,11 +21,11 @@ import {
   Printer,
   Save,
   Scale,
-  Search,
   ShieldCheck,
   Sparkles,
   Stethoscope,
   Syringe,
+  Trash2,
   TrendingDown,
   UserPlus,
   Users,
@@ -39,6 +39,7 @@ import { useAuth } from '../../context/AuthContext';
 import { loadPatientData, savePatientData } from '../../lib/backend';
 import { listLinksForProfessional, requestPatientLink } from '../../lib/professional';
 import {
+  deleteExerciseStorageFile,
   loadExerciseVideos,
   saveExerciseVideos,
   uploadExerciseVideo,
@@ -65,6 +66,7 @@ import { extractPdfOrImages } from '../../lib/pdfExtractor';
 import type { ClinicalRecommendation, DayMenu, PatientData, PatientLink } from '../../lib/types';
 import { cn } from '../../utils/cn';
 import ExerciseLinker from '../../components/ExerciseLinker';
+import PersonalWorkoutManager from '../../components/professional/PersonalWorkoutManager';
 import { EXERCISE_CATALOG, normalizeExerciseText } from '../../lib/exercise';
 
 export default function ProfessionalPortal() {
@@ -1212,6 +1214,11 @@ function PersonalView({ data, patientId, professionalName, update }: { data: Pat
   const a = data.physicalAssessment;
   const workoutLogs = data.workoutLogs ?? [];
   const completedCount = workoutLogs.filter((l) => l.completed).length;
+  const [videos, setVideos] = useState<ExerciseVideo[]>([]);
+
+  useEffect(() => {
+    loadExerciseVideos().then(setVideos).catch(() => setVideos([]));
+  }, [patientId]);
 
   return (
     <div className="space-y-5">
@@ -1249,34 +1256,52 @@ function PersonalView({ data, patientId, professionalName, update }: { data: Pat
         <p className="text-[10px] font-semibold text-slate-400">sessões marcadas como concluídas</p>
       </Card>
 
-      {data.workoutOverride && (
-        <Card className="p-6">
-          <SectionTitle icon={<Check className="h-4 w-4 text-cyan-600" />} title="Seu plano personalizado está ativo" subtitle="o paciente vê este plano no lugar do automático" />
-          <div className="grid gap-2">
-            {data.workoutOverride.sessions.map((s) => (
-              <div key={s.id} className="rounded-xl bg-cyan-50 px-4 py-2.5 text-xs font-bold text-cyan-800 dark:bg-cyan-500/10 dark:text-cyan-200">
-                {s.dayName} · {s.title} · {s.durationMinutes} min · {s.exercises.length} exercícios
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      <PersonalWorkoutManager
+        key={patientId}
+        patientId={patientId}
+        data={data}
+        professionalName={professionalName}
+        videos={videos}
+        update={update}
+      />
 
-      <WorkoutOverrideEditor data={data} professionalName={professionalName} update={update} />
-
-      <PatientVideosPanel patientId={patientId} professionalName={professionalName} />
+      <PatientVideosPanel
+        patientId={patientId}
+        professionalName={professionalName}
+        externalVideos={videos}
+        onVideosChange={setVideos}
+      />
 
       <NoteEditor
         title="Observação do treinador"
         icon={<Dumbbell className="h-4 w-4 text-cyan-600" />}
+        role="personal"
+        history={data.recommendationHistory ?? data.professionalNotes?.history ?? []}
         value={data.professionalNotes?.personal}
         authorName={professionalName}
-        onSave={(text) =>
-          update((prev) => ({
-            ...prev,
-            professionalNotes: { ...prev.professionalNotes, personal: { text, authorName: professionalName, updatedAt: new Date().toISOString() } },
-          }))
-        }
+        onSave={(text) => {
+          const now = new Date().toISOString();
+          const newEntry: ClinicalRecommendation = {
+            id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+            role: 'personal',
+            authorName: professionalName,
+            text,
+            date: now,
+          };
+          update((prev) => {
+            const prevHist = prev.recommendationHistory ?? prev.professionalNotes?.history ?? [];
+            const nextHist = [newEntry, ...prevHist];
+            return {
+              ...prev,
+              recommendationHistory: nextHist,
+              professionalNotes: {
+                ...prev.professionalNotes,
+                personal: { text, authorName: professionalName, updatedAt: now },
+                history: nextHist,
+              },
+            };
+          });
+        }}
       />
       <DisclaimerBox compact />
     </div>
@@ -1285,25 +1310,45 @@ function PersonalView({ data, patientId, professionalName, update }: { data: Pat
 
 /* ================= Vídeos para o paciente (personal) ================= */
 
-function PatientVideosPanel({ patientId, professionalName }: { patientId: string; professionalName: string }) {
-  const [videos, setVideos] = useState<ExerciseVideo[]>([]);
+function PatientVideosPanel({
+  patientId,
+  professionalName,
+  externalVideos,
+  onVideosChange,
+}: {
+  patientId: string;
+  professionalName: string;
+  externalVideos?: ExerciseVideo[];
+  onVideosChange?: (videos: ExerciseVideo[]) => void;
+}) {
+  const [internalVideos, setInternalVideos] = useState<ExerciseVideo[]>([]);
+  const videos = externalVideos ?? internalVideos;
+  const setVideos = (next: ExerciseVideo[]) => {
+    setInternalVideos(next);
+    onVideosChange?.(next);
+  };
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
   const [extraExerciseText, setExtraExerciseText] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [fileRef] = useState(() => ({ current: null as HTMLInputElement | null }));
   const [thumbFileRef] = useState(() => ({ current: null as HTMLInputElement | null }));
 
   async function refresh() {
-    setVideos(await loadExerciseVideos());
+    const loaded = await loadExerciseVideos();
+    setVideos(loaded);
   }
 
   useEffect(() => {
-    void refresh();
+    if (!externalVideos) {
+      void refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleVideoUrlChange(val: string) {
@@ -1403,6 +1448,34 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
     const updated = videos.map((v) => (v.id === video.id ? { ...v, assignedPatientIds: Array.from(assigned) } : v));
     await saveExerciseVideos(updated);
     setVideos(updated);
+  }
+
+  async function deleteAssignedVideo(video: ExerciseVideo) {
+    setBusy(true);
+    try {
+      const assigned = video.assignedPatientIds ?? [];
+      if (assigned.length > 1) {
+        const remaining = assigned.filter((id) => id !== patientId);
+        const updated = videos.map((v) => (v.id === video.id ? { ...v, assignedPatientIds: remaining } : v));
+        await saveExerciseVideos(updated);
+        setVideos(updated);
+        setMessage(`Vídeo "${video.title}" desvinculado deste paciente.`);
+      } else {
+        const updated = videos.filter((v) => v.id !== video.id);
+        await saveExerciseVideos(updated);
+        await Promise.all([
+          deleteExerciseStorageFile(video.videoUrl),
+          video.thumbnailUrl ? deleteExerciseStorageFile(video.thumbnailUrl) : Promise.resolve(false),
+        ]);
+        setVideos(updated);
+        setMessage(`Vídeo "${video.title}" apagado com sucesso.`);
+      }
+      setConfirmDeleteId(null);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : 'Falha ao apagar o vídeo.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   const myAssignments = videos.filter((v) => v.assignedPatientIds?.includes(patientId));
@@ -1520,14 +1593,49 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
           <p className="text-[11px] font-extrabold uppercase tracking-wide text-cyan-600">Já enviados a este paciente</p>
           <div className="mt-2 space-y-1.5">
             {myAssignments.map((v) => (
-              <div key={v.id} className="flex items-center gap-2 rounded-lg bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 dark:bg-cyan-500/10 dark:text-cyan-200">
-                <Film className="h-3.5 w-3.5" /> {v.title}
-                {v.exerciseNames?.map((ex) => (
-                  <span key={ex} className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:bg-slate-800 dark:text-emerald-300">
-                    🔗 {ex}
-                  </span>
-                ))}
-                {videoEmbedUrl(v.videoUrl) && <span className="text-[10px] font-semibold text-cyan-500">· link válido</span>}
+              <div key={v.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 dark:bg-cyan-500/10 dark:text-cyan-200">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <Film className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{v.title}</span>
+                  {v.exerciseNames?.map((ex) => (
+                    <span key={ex} className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:bg-slate-800 dark:text-emerald-300">
+                      🔗 {ex}
+                    </span>
+                  ))}
+                  {videoEmbedUrl(v.videoUrl) && <span className="text-[10px] font-semibold text-cyan-500">· link válido</span>}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {confirmDeleteId === v.id ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void deleteAssignedVideo(v)}
+                        className="rounded-lg bg-rose-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-rose-700"
+                      >
+                        Confirmar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800"
+                      >
+                        Cancelar
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setConfirmDeleteId(v.id)}
+                      className="inline-flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300"
+                      title="Apagar ou desvincular este vídeo"
+                    >
+                      <Trash2 className="h-3 w-3" /> Apagar
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -1557,130 +1665,6 @@ function PatientVideosPanel({ patientId, professionalName }: { patientId: string
           <p className="mt-1.5 text-[10px] text-slate-400">{VIDEO_SUITABILITY.length} categorias de limitação suportadas pela biblioteca.</p>
         </div>
       )}
-    </Card>
-  );
-}
-
-const DAY_NAMES = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'];
-
-function WorkoutOverrideEditor({ data, professionalName, update }: { data: PatientData; professionalName: string; update: (u: (p: PatientData) => PatientData) => void }) {
-  const [rows, setRows] = useState(() =>
-    (data.workoutOverride?.sessions ?? []).map((s) => ({
-      id: s.id,
-      dayIndex: s.dayIndex,
-      title: s.title,
-      focus: s.focus,
-      durationMinutes: s.durationMinutes,
-      intensity: s.intensity,
-      exercisesText: s.exercises.map((e) => `${e.name} | ${e.sets} | ${e.reps} | ${e.restSeconds} | ${e.instructions}`).join('\n'),
-    })),
-  );
-  const [saved, setSaved] = useState(false);
-
-  function addRow() {
-    setRows((prev) => [
-      ...prev,
-      { id: `${Date.now()}`, dayIndex: prev.length % 7, title: `Sessão ${prev.length + 1}`, focus: 'Corpo inteiro', durationMinutes: 30, intensity: 'Leve a moderada', exercisesText: '' },
-    ]);
-  }
-  function removeRow(id: string) {
-    setRows((prev) => prev.filter((r) => r.id !== id));
-  }
-  function patchRow(id: string, patch: Partial<(typeof rows)[number]>) {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  }
-
-  function save() {
-    const sessions = rows.map((r) => ({
-      id: r.id,
-      dayIndex: r.dayIndex,
-      dayName: DAY_NAMES[r.dayIndex],
-      title: r.title,
-      focus: r.focus,
-      durationMinutes: r.durationMinutes,
-      intensity: r.intensity,
-      exercises: r.exercisesText
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          const [name, sets, reps, rest, instructions] = line.split('|').map((p) => p?.trim() ?? '');
-          return {
-            name: name || 'Exercício',
-            sets: Number(sets) || 2,
-            reps: reps || '8 a 12',
-            restSeconds: Number(rest) || 60,
-            instructions: instructions || 'Movimento lento e sem dor.',
-          };
-        }),
-    }));
-    update((prev) => ({
-      ...prev,
-      workoutOverride: {
-        sessions,
-        weeklyMinutes: sessions.reduce((s, x) => s + x.durationMinutes, 0),
-        source: 'ia',
-        safetyNote: `Plano personalizado por ${professionalName}. Interrompa em caso de dor ou mal-estar.`,
-      },
-    }));
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2000);
-  }
-
-  return (
-    <Card className="p-6">
-      <SectionTitle icon={<Dumbbell className="h-4 w-4 text-cyan-600" />} title="Personalizar plano de exercícios" subtitle="substitui o plano automático/adaptativo do paciente" />
-      <div className="space-y-4">
-        {rows.map((r) => (
-          <div key={r.id} className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-            <div className="grid gap-2.5 sm:grid-cols-4">
-              <Field label="Dia da semana">
-                <select
-                  value={r.dayIndex}
-                  onChange={(e) => patchRow(r.id, { dayIndex: Number(e.target.value) })}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                >
-                  {DAY_NAMES.map((d, i) => (
-                    <option key={d} value={i}>
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Título">
-                <TextInput value={r.title} onChange={(e) => patchRow(r.id, { title: e.target.value })} />
-              </Field>
-              <Field label="Foco">
-                <TextInput value={r.focus} onChange={(e) => patchRow(r.id, { focus: e.target.value })} />
-              </Field>
-              <Field label="Duração (min)">
-                <TextInput type="number" value={r.durationMinutes} onChange={(e) => patchRow(r.id, { durationMinutes: Number(e.target.value) })} />
-              </Field>
-            </div>
-            <Field label="Exercícios" hint="um por linha: Nome | séries | repetições | descanso(s) | instruções" className="mt-2.5">
-              <textarea
-                value={r.exercisesText}
-                onChange={(e) => patchRow(r.id, { exercisesText: e.target.value })}
-                rows={3}
-                placeholder="Ex.: Ponte de glúteos | 3 | 12 | 60 | Suba o quadril sem arquear a lombar"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 font-mono text-[11px] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-              />
-            </Field>
-            <button onClick={() => removeRow(r.id)} className="mt-2 text-[11px] font-bold text-rose-500 hover:underline">
-              Remover sessão
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 flex gap-2.5">
-        <Button variant="secondary" onClick={addRow} className="!px-4 !py-2 text-xs">
-          <Search className="h-3.5 w-3.5" /> Adicionar sessão
-        </Button>
-        <Button onClick={save} className="!px-4 !py-2 text-xs">
-          {saved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
-          {saved ? 'Plano publicado!' : 'Publicar plano para o paciente'}
-        </Button>
-      </div>
     </Card>
   );
 }
